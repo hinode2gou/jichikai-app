@@ -312,14 +312,22 @@ function receiveMonth(room, monthIdx) {
   const ym  = termMonthYM(t, monthIdx);
   const u   = unpaid[room];
   if (!u) return;
-  const ymN = ymToNum(ym);
-  if (ymN < ymToNum(u.from) || ymN > ymToNum(u.to)) return;
+  const ymN   = ymToNum(ym);
+  const fromN = ymToNum(u.from);
+
+  // 既に受領済み（ymN < fromN）の場合は無視
+  if (ymN < fromN) return;
+
+  // From〜ym まで一括受領（未払い・未集金どちらでも対応）
+  // Toは受領した月まで縮める（前払いの場合はToも更新）
   const newFrom = addMonths(ym, 1);
-  unpaid[room] = { from: newFrom, to: u.to, longFlag: calcLongFlag(newFrom, u.to) };
+  // Toは現在のToとymの大きい方を維持
+  const newTo = ymToNum(u.to) >= ymN ? u.to : ym;
+  unpaid[room] = { from: newFrom, to: newTo, longFlag: calcLongFlag(newFrom, newTo) };
   pendingRooms.add(room);
   updateSyncBtn(); updateStats();
   if (currentFloor !== null) renderRoomList(currentFloor);
-  showToast(`${room}号室 〜${ym} まとめて受領しました`);
+  showToast(`${room}号室 〜${ym} 受領しました`);
 }
 
 function unreceiveMonth(room, monthIdx) {
@@ -658,6 +666,14 @@ function updateStats() {
 
 function floorStatus(f) {
   const rooms = getRoomsByFloor(f);
+  // 未来の期は全室「未集金」扱い（前払いした人は除く）
+  if (termRelation(viewIdx) === 'future') {
+    const allPrepaid = rooms.every(r => {
+      const t = viewTerm();
+      return t.months.every((_, i) => monthStatus(r, i) === 'paid');
+    });
+    return allPrepaid ? 'all-paid' : 'has-unpaid';
+  }
   const anyLong   = rooms.some(r => unpaid[r] && unpaid[r].longFlag === 1 && hasUnpaid(r));
   const anyUnpaid = rooms.some(r => hasUnpaid(r));
   if (anyLong)   return 'has-unpaid-long';
