@@ -245,7 +245,9 @@ function monthCount(from, to) {
 function hasUnpaid(room) {
   const u = unpaid[room];
   if (!u) return false;
-  return monthCount(u.from, u.to) >= 1;
+  // 表示中の期に未払い月が1つでもあるか
+  const t = viewTerm();
+  return t.months.some((_, i) => monthStatus(room, i) === 'unpaid');
 }
 // 指定年月が未払い期間内かどうか
 function isUnpaidMonth(room, ym) {
@@ -255,9 +257,17 @@ function isUnpaidMonth(room, ym) {
 }
 // 表示中の期の各月が未払いかどうか
 function monthStatus(room, monthIdx) {
-  const t   = viewTerm();
-  const ym  = termMonthYM(t, monthIdx);
-  return isUnpaidMonth(room, ym) ? 'unpaid' : 'paid';
+  const t  = viewTerm();
+  const ym = termMonthYM(t, monthIdx);
+  const u  = unpaid[room];
+  if (!u) return 'paid';
+
+  const ymN   = ymToNum(ym);
+  const fromN = ymToNum(u.from);
+  const toN   = ymToNum(u.to);
+
+  // この月がFrom〜Toの範囲内なら未払い
+  return (ymN >= fromN && ymN <= toN) ? 'unpaid' : 'paid';
 }
 // 期の月インデックスをYYYY/MMに変換
 function termMonthYM(term, idx) {
@@ -284,53 +294,27 @@ function receiveMonth(room, monthIdx) {
   const t   = viewTerm();
   const ym  = termMonthYM(t, monthIdx);
   const u   = unpaid[room];
-
   if (!u) return;
-
-  const fromNum = ymToNum(u.from);
-  const ymNum   = ymToNum(ym);
-
-  // 対象月が未払い期間内でない場合は無視
-  if (ymNum < fromNum || ymNum > ymToNum(u.to)) return;
-
-  // fromNum〜ymNum まで一括受領 → From を ym の翌月に更新
+  const ymN = ymToNum(ym);
+  if (ymN < ymToNum(u.from) || ymN > ymToNum(u.to)) return;
   const newFrom = addMonths(ym, 1);
-  unpaid[room] = {
-    from:     newFrom,
-    to:       u.to,
-    longFlag: calcLongFlag(newFrom, u.to)
-  };
+  unpaid[room] = { from: newFrom, to: u.to, longFlag: calcLongFlag(newFrom, u.to) };
   pendingRooms.add(room);
-  updateSyncBtn();
-  updateStats();
+  updateSyncBtn(); updateStats();
   if (currentFloor !== null) renderRoomList(currentFloor);
   showToast(`${room}号室 〜${ym} まとめて受領しました`);
 }
 
-// 受領済みを未払いに戻す（From を1ヶ月前に戻す）
 function unreceiveMonth(room, monthIdx) {
   const t   = viewTerm();
   const ym  = termMonthYM(t, monthIdx);
   const u   = unpaid[room];
   if (!u) return;
-
-  const fromNum = ymToNum(u.from);
-  const ymNum   = ymToNum(ym);
-
-  // 対象月の翌月 = 現在のFromの場合のみ「1つ戻す」
-  if (ymNum !== fromNum - 1 && addMonths(ym,1) !== u.from) {
-    // 対象月以降をまとめて未払いに戻す
-  }
-  // From を ym に戻す
-  const newFrom = ym;
-  unpaid[room] = {
-    from:     newFrom,
-    to:       u.to,
-    longFlag: calcLongFlag(newFrom, u.to)
-  };
+  const ymN = ymToNum(ym);
+  if (ymN >= ymToNum(u.from)) return;
+  unpaid[room] = { from: ym, to: u.to, longFlag: calcLongFlag(ym, u.to) };
   pendingRooms.add(room);
-  updateSyncBtn();
-  updateStats();
+  updateSyncBtn(); updateStats();
   if (currentFloor !== null) renderRoomList(currentFloor);
   showToast(`${room}号室 ${ym} 未払いに戻しました`);
 }
@@ -626,13 +610,25 @@ function renderTermBar() {
 
 function updateStats() {
   const rooms = residents.map(r => r.room).filter(r => !SKIP_ROOMS.includes(r));
+  const t = viewTerm();
+
+  // 表示中の期で未払い月数を集計
+  let totalPaidMonths = 0, totalUnpaidMonths = 0;
+  rooms.forEach(r => {
+    t.months.forEach((_, i) => {
+      if (monthStatus(r, i) === 'paid') totalPaidMonths++;
+      else totalUnpaidMonths++;
+    });
+  });
+
   const paidCount   = rooms.filter(r => !hasUnpaid(r)).length;
   const unpaidCount = rooms.filter(r => hasUnpaid(r)).length;
-  const totalAmt    = rooms.reduce((s,r) => {
-    const u = unpaid[r];
-    if (!u || !hasUnpaid(r)) return s;
-    return s + Math.max(0, monthCount(u.from, u.to)) * MONTHLY_FEE;
+  // 表示期の未払い月数×月額で金額集計
+  const totalAmt = rooms.reduce((s, r) => {
+    const unpaidMonths = t.months.filter((_, i) => monthStatus(r, i) === 'unpaid').length;
+    return s + unpaidMonths * MONTHLY_FEE;
   }, 0);
+
   document.getElementById('s-paid').textContent   = paidCount;
   document.getElementById('s-unpaid').textContent = unpaidCount;
   document.getElementById('s-total').textContent  = '¥' + totalAmt.toLocaleString();
@@ -713,11 +709,14 @@ function renderRoomList(f) {
 
 function renderUnpaidList() {
   const wrap  = document.getElementById('view-od');
+  const t     = viewTerm();
   const rooms = residents.map(r => r.room).filter(r => !SKIP_ROOMS.includes(r) && hasUnpaid(r));
+
   if (rooms.length === 0) {
     wrap.innerHTML = '<p style="padding:24px 16px;color:var(--text2);font-size:14px;">未払いはありません</p>';
     return;
   }
+
   // 長期未払い→通常の順にソート
   rooms.sort((a,b) => {
     const al = unpaid[a]?.longFlag || 0;
@@ -725,16 +724,24 @@ function renderUnpaidList() {
     if (al !== bl) return bl - al;
     return a - b;
   });
+
   let html = '<div style="padding-top:8px;">';
   rooms.forEach(r => {
-    const u      = unpaid[r];
-    const mc     = Math.max(0, monthCount(u.from, u.to));
-    const amt    = mc * MONTHLY_FEE;
+    const u = unpaid[r];
+    // 表示期の未払い月数
+    const unpaidMonths = t.months.filter((_, i) => monthStatus(r, i) === 'unpaid');
+    const mc    = unpaidMonths.length;
+    const amt   = mc * MONTHLY_FEE;
     const isLong = u.longFlag === 1;
+    // 総未払い月数（From〜To全体）
+    const totalMc = Math.max(0, monthCount(u.from, u.to));
     html += `<div class="unpaid-item ${isLong?'long':''}" onclick="openModal(${r})">
       <div>
         <div class="unpaid-room">${r}号室 ${getRoomName(r)}${isLong?'<span class="long-badge">長期</span>':''}</div>
-        <div class="unpaid-detail">${u.from} 〜 ${u.to}（${mc}ヶ月）</div>
+        <div class="unpaid-detail">
+          ${t.year}年度${t.half}: ${unpaidMonths.join('・')} 未払い
+          ${totalMc > mc ? `（累計${totalMc}ヶ月）` : ''}
+        </div>
       </div>
       <div class="unpaid-amount">¥${amt.toLocaleString()}</div>
     </div>`;
@@ -761,9 +768,11 @@ function openModal(room) {
   });
   monthsHtml += '</div>';
 
+  // 総累計未払い月数
+  const totalMc  = Math.max(0, monthCount(u.from, u.to));
   const infoHtml = `<div class="modal-info">
-    未払い期間: <b>${hasUnpaid(room) ? u.from + ' 〜 ' + u.to : 'なし'}</b><br>
-    未払い月数: <b>${mc}ヶ月</b>　未払い金額: <b>¥${amt.toLocaleString()}</b>
+    累計未払い期間: <b>${hasUnpaid(room) ? u.from + ' 〜 ' + u.to : 'なし'}</b><br>
+    累計未払い月数: <b>${totalMc}ヶ月</b>　今期未払い: <b>${mc}ヶ月 / ¥${amt.toLocaleString()}</b>
     ${u.longFlag===1 ? '<br><span style="color:var(--red);font-size:12px;">⚠ 長期未払い（10ヶ月以上）</span>' : ''}
   </div>`;
 
