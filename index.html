@@ -79,9 +79,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .mc:active{transform:scale(0.88);}
 .mc.paid{background:var(--green-l);border-color:var(--green-b);}
 .mc.unpaid{background:var(--red-l);border-color:var(--red-b);}
+.mc.future{background:var(--gray-l);border-color:var(--gray-b);opacity:0.5;}
 .mc .ml{font-size:9px;color:var(--text2);}
 .mc.paid .ml,.mc.paid .mi{color:var(--green);}
 .mc.unpaid .ml,.mc.unpaid .mi{color:var(--red);}
+.mc.future .ml,.mc.future .mi{color:var(--text3);}
 .mc .mi{font-size:11px;color:var(--text3);}
 .long-flag{font-size:10px;padding:2px 5px;border-radius:4px;background:var(--red-l);color:var(--red);border:1px solid var(--red-b);flex-shrink:0;white-space:nowrap;}
 
@@ -103,9 +105,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .modal-mc{width:46px;border-radius:6px;padding:6px 2px;text-align:center;cursor:pointer;border:1px solid var(--gray-b);background:var(--white);}
 .modal-mc.paid{background:var(--green-l);border-color:var(--green-b);}
 .modal-mc.unpaid{background:var(--red-l);border-color:var(--red-b);}
+.modal-mc.future{background:var(--gray-l);border-color:var(--gray-b);opacity:0.5;}
 .modal-mc .ml{font-size:9px;color:var(--text2);}
 .modal-mc.paid .ml,.modal-mc.paid .mi{color:var(--green);}
 .modal-mc.unpaid .ml,.modal-mc.unpaid .mi{color:var(--red);}
+.modal-mc.future .ml,.modal-mc.future .mi{color:var(--text3);}
 .modal-mc .mi{font-size:12px;color:var(--text3);}
 .modal-close{width:100%;padding:11px;border-radius:var(--r);border:1px solid var(--gray-b);cursor:pointer;font-size:14px;font-weight:500;background:var(--gray-l);color:var(--text);margin-top:4px;}
 
@@ -245,9 +249,17 @@ function monthCount(from, to) {
 function hasUnpaid(room) {
   const u = unpaid[room];
   if (!u) return false;
-  // 表示中の期に未払い月が1つでもあるか
   const t = viewTerm();
   return t.months.some((_, i) => monthStatus(room, i) === 'unpaid');
+}
+
+function hasPrepaid(room) {
+  const u = unpaid[room];
+  if (!u) return false;
+  const t = viewTerm();
+  // 表示期の全月がpaid（前払い済み）かつfutureでない
+  return t.months.every((_, i) => monthStatus(room, i) === 'paid')
+    && ymToNum(u.from) > ymToNum(t.endYM);
 }
 // 指定年月が未払い期間内かどうか
 function isUnpaidMonth(room, ym) {
@@ -255,19 +267,24 @@ function isUnpaidMonth(room, ym) {
   const u = unpaid[room];
   return ymToNum(ym) >= ymToNum(u.from) && ymToNum(ym) <= ymToNum(u.to);
 }
-// 表示中の期の各月が未払いかどうか
+// 表示中の期の各月のステータス
+// 戻り値:
+//   'paid'   → 支払い済み（ymN < fromN）
+//   'unpaid' → 未払い（fromN <= ymN <= toN）
+//   'future' → まだ集金対象外（ymN > toN）
 function monthStatus(room, monthIdx) {
-  const t  = viewTerm();
-  const ym = termMonthYM(t, monthIdx);
-  const u  = unpaid[room];
-  if (!u) return 'paid';
+  const t   = viewTerm();
+  const ym  = termMonthYM(t, monthIdx);
+  const u   = unpaid[room];
+  if (!u) return 'future';
 
   const ymN   = ymToNum(ym);
   const fromN = ymToNum(u.from);
   const toN   = ymToNum(u.to);
 
-  // この月がFrom〜Toの範囲内なら未払い
-  return (ymN >= fromN && ymN <= toN) ? 'unpaid' : 'paid';
+  if (ymN < fromN)  return 'paid';    // 支払い済み
+  if (ymN <= toN)   return 'unpaid';  // 未払い
+  return 'future';                    // 集金対象外（まだ）
 }
 // 期の月インデックスをYYYY/MMに変換
 function termMonthYM(term, idx) {
@@ -321,9 +338,11 @@ function unreceiveMonth(room, monthIdx) {
 
 function toggleMonth(room, monthIdx) {
   const status = monthStatus(room, monthIdx);
-  if (status === 'unpaid') {
+  if (status === 'unpaid' || status === 'future') {
+    // 未払いまたは未集金月をタップ → 受領（前払い対応）
     receiveMonth(room, monthIdx);
-  } else {
+  } else if (status === 'paid') {
+    // 支払い済みをタップ → 未払いに戻す
     unreceiveMonth(room, monthIdx);
   }
 }
@@ -695,9 +714,10 @@ function renderRoomList(f) {
       <div class="months-row">`;
     t.months.forEach((m, i) => {
       const st = monthStatus(r, i);
+      const icon = st==='paid' ? '✓' : st==='unpaid' ? '✗' : '–';
       html += `<div class="mc ${st}" onclick="toggleMonth(${r},${i})">
         <div class="ml">${m}</div>
-        <div class="mi">${st==='paid'?'✓':'✗'}</div>
+        <div class="mi">${icon}</div>
       </div>`;
     });
     html += `</div>`;
@@ -762,8 +782,9 @@ function openModal(room) {
   let monthsHtml = '<div class="modal-months">';
   t.months.forEach((m,i) => {
     const st = monthStatus(room, i);
+    const icon = st==='paid' ? '✓' : st==='unpaid' ? '✗' : '–';
     monthsHtml += `<div class="modal-mc ${st}" onclick="toggleMonth(${room},${i});refreshModal(${room})">
-      <div class="ml">${m}</div><div class="mi">${st==='paid'?'✓':'✗'}</div>
+      <div class="ml">${m}</div><div class="mi">${icon}</div>
     </div>`;
   });
   monthsHtml += '</div>';
