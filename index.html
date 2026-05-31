@@ -129,10 +129,51 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .offline-banner{background:var(--yellow-l);border-bottom:1px solid var(--yellow-b);padding:6px 14px;font-size:12px;color:var(--yellow);text-align:center;}
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:rgba(17,24,39,0.92);color:var(--white);font-size:13px;padding:9px 22px;border-radius:20px;opacity:0;transition:opacity 0.25s;pointer-events:none;z-index:99;white-space:nowrap;}
 .toast.show{opacity:1;}
+
+/* パスワード認証画面 */
+.pin-screen{position:fixed;inset:0;background:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;}
+.pin-title{color:var(--white);font-size:22px;font-weight:700;margin-bottom:6px;}
+.pin-sub{color:rgba(255,255,255,0.7);font-size:14px;margin-bottom:32px;}
+.pin-dots{display:flex;gap:14px;margin-bottom:32px;}
+.pin-dot{width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,0.3);transition:background 0.15s;}
+.pin-dot.filled{background:var(--white);}
+.pin-error{color:#fca5a5;font-size:13px;margin-bottom:16px;min-height:20px;}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:240px;}
+.pin-key{background:rgba(255,255,255,0.15);border:none;border-radius:12px;padding:18px;font-size:22px;font-weight:600;color:var(--white);cursor:pointer;transition:background 0.1s;}
+.pin-key:active{background:rgba(255,255,255,0.35);}
+.pin-key.del{font-size:16px;}
+.pin-key.empty{background:transparent;cursor:default;}
 </style>
 </head>
 <body>
-<div class="app">
+<!-- パスワード認証画面 -->
+<div class="pin-screen" id="pin-screen" style="display:none;">
+  <div class="pin-title">自治会集金管理</div>
+  <div class="pin-sub">暗証番号を入力してください</div>
+  <div class="pin-dots" id="pin-dots">
+    <div class="pin-dot" id="dot0"></div>
+    <div class="pin-dot" id="dot1"></div>
+    <div class="pin-dot" id="dot2"></div>
+    <div class="pin-dot" id="dot3"></div>
+  </div>
+  <div class="pin-error" id="pin-error"></div>
+  <div class="pin-keypad">
+    <button class="pin-key" onclick="pinInput('1')">1</button>
+    <button class="pin-key" onclick="pinInput('2')">2</button>
+    <button class="pin-key" onclick="pinInput('3')">3</button>
+    <button class="pin-key" onclick="pinInput('4')">4</button>
+    <button class="pin-key" onclick="pinInput('5')">5</button>
+    <button class="pin-key" onclick="pinInput('6')">6</button>
+    <button class="pin-key" onclick="pinInput('7')">7</button>
+    <button class="pin-key" onclick="pinInput('8')">8</button>
+    <button class="pin-key" onclick="pinInput('9')">9</button>
+    <button class="pin-key empty"></button>
+    <button class="pin-key" onclick="pinInput('0')">0</button>
+    <button class="pin-key del" onclick="pinDelete()">⌫</button>
+  </div>
+</div>
+
+<div class="app" id="main-app" style="display:none;">
   <div class="header">
     <div class="header-left">
       <button class="back-btn" id="back-btn" onclick="goHome()">← フロア</button>
@@ -173,6 +214,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
   <div id="view-od" style="display:none;"></div>
 </div>
+
+</div><!-- /.app -->
 
 <div id="modal-root"></div>
 <div class="toast" id="toast"></div>
@@ -860,8 +903,12 @@ function switchTab(tab) {
 }
 
 function showLoading(show) {
-  document.getElementById('loading-view').style.display = show ? 'flex' : 'none';
-  if (!show) document.getElementById('floor-view').style.display = 'block';
+  const lv = document.getElementById('loading-view');
+  if (lv) lv.style.display = show ? 'flex' : 'none';
+  if (!show) {
+    const fv = document.getElementById('floor-view');
+    if (fv) fv.style.display = 'block';
+  }
 }
 
 function showToast(msg) {
@@ -874,15 +921,93 @@ window.addEventListener('online',  () => { document.getElementById('offline-bann
 window.addEventListener('offline', () => { document.getElementById('offline-banner').style.display='block'; });
 
 // ===================================================
-// 起動
+// パスワード認証
 // ===================================================
-(async () => {
-  await openDB();
+let correctPassword = null;
+let pinCurrent = '';
+
+function pinInput(num) {
+  if (pinCurrent.length >= 4) return;
+  pinCurrent += num;
+  updatePinDots();
+  if (pinCurrent.length === 4) {
+    setTimeout(checkPin, 150);
+  }
+}
+
+function pinDelete() {
+  pinCurrent = pinCurrent.slice(0, -1);
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '';
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById(`dot${i}`);
+    dot.classList.toggle('filled', i < pinCurrent.length);
+  }
+}
+
+function checkPin() {
+  if (pinCurrent === correctPassword) {
+    // 認証成功
+    document.getElementById('pin-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = 'block';
+    startApp();
+  } else {
+    // 認証失敗
+    document.getElementById('pin-error').textContent = '暗証番号が違います';
+    pinCurrent = '';
+    updatePinDots();
+    // 画面を振動させる
+    const dots = document.getElementById('pin-dots');
+    dots.style.transition = 'transform 0.05s';
+    let count = 0;
+    const shake = setInterval(() => {
+      dots.style.transform = count % 2 === 0 ? 'translateX(8px)' : 'translateX(-8px)';
+      count++;
+      if (count > 5) {
+        clearInterval(shake);
+        dots.style.transform = 'translateX(0)';
+      }
+    }, 60);
+  }
+}
+
+async function startApp() {
   if (!navigator.onLine) {
     document.getElementById('offline-banner').style.display = 'block';
     await loadFromLocal();
   } else {
     await loadAll();
+  }
+}
+
+// ===================================================
+// 起動
+// ===================================================
+(async () => {
+  await openDB();
+
+  if (!navigator.onLine) {
+    // オフライン時はパスワード認証スキップ・そのまま起動
+    document.getElementById('main-app').style.display = 'block';
+    document.getElementById('offline-banner').style.display = 'block';
+    await loadFromLocal();
+    return;
+  }
+
+  // オンライン時：パスワードをGASから取得して認証画面を表示
+  try {
+    showLoading(true);
+    const data = await gasGet({ action: 'getPassword' });
+    correctPassword = data.password || '0000';
+    showLoading(false);
+    document.getElementById('pin-screen').style.display = 'flex';
+  } catch(e) {
+    // パスワード取得失敗時はスキップして起動
+    document.getElementById('main-app').style.display = 'block';
+    await startApp();
   }
 })();
 </script>
