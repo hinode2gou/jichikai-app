@@ -5,22 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#2563eb">
-<title>自治会集金管理</title>
+<meta name="theme-color" content="#1e40af">
+<title>自治会管理システム</title>
 <style>
 :root{
-  --blue:#2563eb;--blue-l:#eff6ff;--blue-b:#bfdbfe;
+  --blue:#1e40af;--blue2:#2563eb;--blue-l:#eff6ff;--blue-b:#bfdbfe;
   --green:#16a34a;--green-l:#f0fdf4;--green-b:#bbf7d0;
   --red:#dc2626;--red-l:#fef2f2;--red-b:#fecaca;
   --yellow:#d97706;--yellow-l:#fffbeb;--yellow-b:#fde68a;
+  --orange:#ea580c;--orange-l:#fff7ed;--orange-b:#fed7aa;
+  --purple:#7c3aed;--purple-l:#f5f3ff;--purple-b:#ddd6fe;
   --gray:#6b7280;--gray-l:#f9fafb;--gray-b:#e5e7eb;
   --text:#111827;--text2:#6b7280;--text3:#9ca3af;
   --white:#fff;--r:10px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f3f4f6;color:var(--text);}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif;background:#f3f4f6;color:var(--text);}
 .app{max-width:700px;margin:0 auto;background:var(--white);min-height:100vh;display:flex;flex-direction:column;}
 
+/* ===== ヘッダー ===== */
 .header{background:var(--blue);color:var(--white);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;position:sticky;top:0;z-index:10;}
 .header-left{display:flex;align-items:center;gap:8px;}
 .back-btn{background:rgba(255,255,255,0.2);border:none;border-radius:6px;padding:6px 10px;color:var(--white);font-size:13px;cursor:pointer;display:none;align-items:center;gap:4px;}
@@ -30,8 +33,55 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .sync-btn{border:none;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;}
 .sync-btn.pending{background:var(--yellow-l);color:var(--yellow);border:1px solid var(--yellow-b);}
 .sync-btn.synced{background:var(--green-l);color:var(--green);border:1px solid var(--green-b);}
-.switch-term-btn{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 10px;color:var(--white);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;}
+.header-menu-btn{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 10px;color:var(--white);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;}
 
+/* ===== 集金日バナー ===== */
+.collection-banner{background:var(--blue-l);border-bottom:2px solid var(--blue-b);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;}
+.collection-banner.today{background:#fef3c7;border-color:#fcd34d;}
+.banner-label{font-size:11px;color:var(--blue);font-weight:600;}
+.banner-date{font-size:13px;color:var(--blue);font-weight:700;}
+.banner-date.today{color:#92400e;}
+.offline-banner{background:var(--yellow-l);border-bottom:1px solid var(--yellow-b);padding:6px 14px;font-size:12px;color:var(--yellow);text-align:center;}
+
+/* ===== PIN画面 ===== */
+.pin-screen{position:fixed;inset:0;background:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;}
+.pin-logo{color:rgba(255,255,255,0.3);font-size:48px;margin-bottom:16px;}
+.pin-title{color:var(--white);font-size:22px;font-weight:700;margin-bottom:6px;}
+.pin-sub{color:rgba(255,255,255,0.7);font-size:14px;margin-bottom:32px;}
+.pin-dots{display:flex;gap:14px;margin-bottom:32px;}
+.pin-dot{width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,0.3);transition:background 0.15s;}
+.pin-dot.filled{background:var(--white);}
+.pin-error{color:#fca5a5;font-size:13px;margin-bottom:16px;min-height:20px;}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:240px;}
+.pin-key{background:rgba(255,255,255,0.15);border:none;border-radius:12px;padding:18px;font-size:22px;font-weight:600;color:var(--white);cursor:pointer;transition:background 0.1s;}
+.pin-key:active{background:rgba(255,255,255,0.35);}
+.pin-key.del{font-size:16px;}
+.pin-key.empty{background:transparent;cursor:default;}
+
+/* ===== メインメニュー ===== */
+.menu-screen{padding:20px 14px;}
+.menu-welcome{margin-bottom:20px;}
+.menu-welcome-title{font-size:18px;font-weight:700;color:var(--text);}
+.menu-welcome-sub{font-size:12px;color:var(--text2);margin-top:3px;}
+.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.menu-card{border-radius:14px;padding:18px 16px;cursor:pointer;display:flex;flex-direction:column;gap:10px;border:2px solid transparent;transition:transform 0.1s,box-shadow 0.1s;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+.menu-card:active{transform:scale(0.97);}
+.menu-card.blue{background:var(--blue-l);border-color:var(--blue-b);}
+.menu-card.green{background:var(--green-l);border-color:var(--green-b);}
+.menu-card.orange{background:var(--orange-l);border-color:var(--orange-b);}
+.menu-card.purple{background:var(--purple-l);border-color:var(--purple-b);}
+.menu-card-icon{font-size:28px;}
+.menu-card-title{font-size:15px;font-weight:700;}
+.menu-card.blue .menu-card-title{color:var(--blue);}
+.menu-card.green .menu-card-title{color:var(--green);}
+.menu-card.orange .menu-card-title{color:var(--orange);}
+.menu-card.purple .menu-card-title{color:var(--purple);}
+.menu-card-sub{font-size:11px;color:var(--text2);line-height:1.5;}
+.menu-badge{display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600;margin-top:2px;}
+.menu-badge.red{background:var(--red-l);color:var(--red);border:1px solid var(--red-b);}
+.menu-badge.yellow{background:var(--yellow-l);color:var(--yellow);border:1px solid var(--yellow-b);}
+
+/* ===== 集金管理（自治会費管理）===== */
 .term-bar{background:var(--white);border-bottom:1px solid var(--gray-b);padding:8px 14px;display:flex;align-items:center;gap:8px;}
 .term-arrow{background:none;border:1px solid var(--gray-b);border-radius:6px;width:30px;height:30px;cursor:pointer;font-size:16px;color:var(--text);display:flex;align-items:center;justify-content:center;}
 .term-arrow:disabled{opacity:0.3;cursor:default;}
@@ -53,7 +103,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 .tab-bar{display:flex;border-bottom:1px solid var(--gray-b);}
 .tab{flex:1;padding:10px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;color:var(--text2);text-align:center;font-weight:500;}
-.tab.active{border-bottom-color:var(--blue);color:var(--blue);}
+.tab.active{border-bottom-color:var(--blue2);color:var(--blue2);}
 
 /* フロアグリッド */
 .floor-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px;}
@@ -68,7 +118,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .floor-card.has-unpaid .floor-num{color:var(--yellow);}
 .floor-stat{font-size:10px;color:var(--text2);margin-top:3px;}
 
-/* 部屋リスト（全室縦並び） */
+/* 部屋リスト */
 .room-section-label{font-size:11px;font-weight:600;color:var(--text2);padding:8px 14px 4px;background:var(--gray-l);border-bottom:1px solid var(--gray-b);}
 .room-row{display:flex;align-items:center;padding:9px 14px;border-bottom:1px solid var(--gray-b);gap:8px;background:var(--white);}
 .room-info{width:72px;flex-shrink:0;}
@@ -95,7 +145,59 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .unpaid-amount{font-size:14px;font-weight:600;color:var(--red);text-align:right;}
 .long-badge{font-size:10px;background:#dc2626;color:var(--white);padding:1px 6px;border-radius:4px;margin-left:6px;}
 
-/* モーダル */
+/* ===== 住人情報管理 ===== */
+.resident-search{padding:10px 14px;border-bottom:1px solid var(--gray-b);}
+.resident-search input{width:100%;padding:9px 12px;border:1px solid var(--gray-b);border-radius:8px;font-size:14px;outline:none;}
+.resident-search input:focus{border-color:var(--blue2);}
+.resident-item{display:flex;align-items:center;padding:11px 14px;border-bottom:1px solid var(--gray-b);gap:10px;cursor:pointer;}
+.resident-item:active{background:var(--gray-l);}
+.resident-room{font-size:13px;font-weight:700;color:var(--blue2);width:44px;flex-shrink:0;}
+.resident-name{font-size:14px;font-weight:500;flex:1;}
+.resident-note{font-size:11px;color:var(--text3);max-width:100px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.resident-edit-icon{color:var(--text3);font-size:16px;}
+.floor-label{padding:7px 14px;font-size:11px;font-weight:700;color:var(--text2);background:var(--gray-l);border-bottom:1px solid var(--gray-b);}
+
+/* ===== 出金登録 ===== */
+.finance-section{padding:14px;}
+.finance-section h3{font-size:14px;font-weight:700;color:var(--text2);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--gray-b);}
+.form-group{margin-bottom:12px;}
+.form-label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;display:block;}
+.form-input{width:100%;padding:10px 12px;border:1px solid var(--gray-b);border-radius:8px;font-size:14px;outline:none;background:var(--white);}
+.form-input:focus{border-color:var(--blue2);box-shadow:0 0 0 3px rgba(37,99,235,0.1);}
+.form-select{width:100%;padding:10px 12px;border:1px solid var(--gray-b);border-radius:8px;font-size:14px;outline:none;background:var(--white);-webkit-appearance:none;}
+.form-select:focus{border-color:var(--blue2);}
+.quick-items{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.quick-item{padding:6px 12px;border:1px solid var(--gray-b);border-radius:20px;font-size:12px;cursor:pointer;background:var(--white);}
+.quick-item:active{background:var(--gray-l);}
+.quick-item.selected{background:var(--blue-l);border-color:var(--blue-b);color:var(--blue2);font-weight:600;}
+.submit-btn{width:100%;padding:14px;background:var(--blue2);color:var(--white);border:none;border-radius:var(--r);font-size:15px;font-weight:700;cursor:pointer;}
+.submit-btn:active{opacity:0.85;}
+.submit-btn:disabled{background:var(--gray-b);color:var(--text3);cursor:default;}
+.finance-history{margin-top:16px;}
+.finance-history-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--gray-b);}
+.fh-left{flex:1;}
+.fh-date{font-size:11px;color:var(--text3);}
+.fh-item{font-size:13px;font-weight:500;}
+.fh-type{font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;}
+.fh-type.expense{background:var(--red-l);color:var(--red);}
+.fh-type.income{background:var(--green-l);color:var(--green);}
+.fh-amount{font-size:14px;font-weight:700;}
+.fh-amount.expense{color:var(--red);}
+.fh-amount.income{color:var(--green);}
+
+/* ===== 出納連携 ===== */
+.ledger-section{padding:14px;}
+.ledger-summary{background:var(--blue-l);border:1px solid var(--blue-b);border-radius:var(--r);padding:14px;margin-bottom:16px;}
+.ledger-summary-title{font-size:12px;font-weight:600;color:var(--blue2);margin-bottom:8px;}
+.ledger-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;}
+.ledger-row.total{font-weight:700;border-top:1px solid var(--blue-b);margin-top:6px;padding-top:8px;font-size:14px;}
+.ledger-sync-btn{width:100%;padding:14px;background:var(--green);color:var(--white);border:none;border-radius:var(--r);font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;}
+.ledger-sync-btn:disabled{background:var(--gray-b);color:var(--text3);}
+.ledger-detail{margin-top:12px;}
+.ledger-detail-title{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;}
+.ledger-room-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--gray-b);font-size:13px;}
+
+/* ===== モーダル ===== */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;}
 .modal{background:var(--white);border-radius:14px;padding:20px;width:100%;max-width:340px;max-height:85vh;overflow-y:auto;}
 .modal-title{font-size:17px;font-weight:700;margin-bottom:2px;}
@@ -112,6 +214,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .modal-mc.future .ml,.modal-mc.future .mi{color:var(--text3);}
 .modal-mc .mi{font-size:12px;color:var(--text3);}
 .modal-close{width:100%;padding:11px;border-radius:var(--r);border:1px solid var(--gray-b);cursor:pointer;font-size:14px;font-weight:500;background:var(--gray-l);color:var(--text);margin-top:4px;}
+.modal-memo{width:100%;padding:9px 10px;border:1px solid var(--gray-b);border-radius:8px;font-size:13px;resize:vertical;min-height:60px;margin-bottom:8px;}
+.memo-save-btn{width:100%;padding:10px;background:var(--blue2);color:var(--white);border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;}
 
 /* 確認ダイアログ */
 .confirm-modal{background:var(--white);border-radius:14px;padding:24px;width:100%;max-width:320px;}
@@ -120,35 +224,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .confirm-actions{display:flex;gap:8px;}
 .confirm-btn{flex:1;padding:11px;border-radius:var(--r);border:none;cursor:pointer;font-size:14px;font-weight:600;}
 .confirm-btn.cancel{background:var(--gray-l);color:var(--text);}
-.confirm-btn.ok{background:var(--blue);color:var(--white);}
+.confirm-btn.ok{background:var(--blue2);color:var(--white);}
+.confirm-btn.danger{background:var(--red);color:var(--white);}
 
 .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:var(--text2);}
-.spinner{width:36px;height:36px;border:3px solid var(--gray-b);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:14px;}
+.spinner{width:36px;height:36px;border:3px solid var(--gray-b);border-top-color:var(--blue2);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:14px;}
 @keyframes spin{to{transform:rotate(360deg);}}
-
-.offline-banner{background:var(--yellow-l);border-bottom:1px solid var(--yellow-b);padding:6px 14px;font-size:12px;color:var(--yellow);text-align:center;}
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:rgba(17,24,39,0.92);color:var(--white);font-size:13px;padding:9px 22px;border-radius:20px;opacity:0;transition:opacity 0.25s;pointer-events:none;z-index:99;white-space:nowrap;}
 .toast.show{opacity:1;}
 
-/* パスワード認証画面 */
-.pin-screen{position:fixed;inset:0;background:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;}
-.pin-title{color:var(--white);font-size:22px;font-weight:700;margin-bottom:6px;}
-.pin-sub{color:rgba(255,255,255,0.7);font-size:14px;margin-bottom:32px;}
-.pin-dots{display:flex;gap:14px;margin-bottom:32px;}
-.pin-dot{width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,0.3);transition:background 0.15s;}
-.pin-dot.filled{background:var(--white);}
-.pin-error{color:#fca5a5;font-size:13px;margin-bottom:16px;min-height:20px;}
-.pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:240px;}
-.pin-key{background:rgba(255,255,255,0.15);border:none;border-radius:12px;padding:18px;font-size:22px;font-weight:600;color:var(--white);cursor:pointer;transition:background 0.1s;}
-.pin-key:active{background:rgba(255,255,255,0.35);}
-.pin-key.del{font-size:16px;}
-.pin-key.empty{background:transparent;cursor:default;}
+.section-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--gray-b);}
+.section-header-title{font-size:14px;font-weight:700;}
+.section-header-action{font-size:12px;color:var(--blue2);cursor:pointer;font-weight:600;}
+.switch-term-btn{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 10px;color:var(--white);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;}
+
+.empty-state{padding:40px 20px;text-align:center;color:var(--text2);font-size:14px;}
 </style>
 </head>
 <body>
-<!-- パスワード認証画面 -->
+
+<!-- ===== PIN認証画面 ===== -->
 <div class="pin-screen" id="pin-screen" style="display:none;">
-  <div class="pin-title">自治会集金管理</div>
+  <div class="pin-logo">🏢</div>
+  <div class="pin-title">自治会管理システム</div>
   <div class="pin-sub">暗証番号を入力してください</div>
   <div class="pin-dots" id="pin-dots">
     <div class="pin-dot" id="dot0"></div>
@@ -173,49 +271,162 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<!-- ===== メインアプリ ===== -->
 <div class="app" id="main-app" style="display:none;">
+
+  <!-- ヘッダー -->
   <div class="header">
     <div class="header-left">
-      <button class="back-btn" id="back-btn" onclick="goHome()">← フロア</button>
-      <div class="header-title" id="header-title">自治会集金管理</div>
+      <button class="back-btn" id="back-btn" onclick="handleBack()">← 戻る</button>
+      <div class="header-title" id="header-title">自治会管理システム</div>
     </div>
-    <div class="header-actions">
-      <button class="switch-term-btn" onclick="confirmSwitchTerm()">期切替</button>
-      <button class="sync-btn synced" id="sync-btn" onclick="doSync()">✓ 同期済</button>
+    <div class="header-actions" id="header-actions">
+      <!-- 画面に応じて変わる -->
     </div>
   </div>
 
+  <!-- オフラインバナー -->
   <div id="offline-banner" class="offline-banner" style="display:none;">オフライン中 - 操作はローカルに保存されます</div>
 
-  <div class="term-bar">
-    <button class="term-arrow" id="btn-prev" onclick="changeView(-1)">‹</button>
-    <div class="term-center">
-      <div class="term-name" id="term-name"></div>
-      <div class="term-hint" id="term-hint"></div>
+  <!-- 集金日バナー（メニュー画面のみ表示）-->
+  <div id="collection-banner" class="collection-banner" style="display:none;">
+    <div>
+      <div class="banner-label" id="banner-label">次回集金日</div>
+      <div class="banner-date" id="banner-date">-</div>
     </div>
-    <button class="term-arrow" id="btn-next" onclick="changeView(1)">›</button>
+    <div style="font-size:11px;color:var(--blue);text-align:right;" id="banner-floor"></div>
   </div>
 
-  <div class="stats-row">
-    <div class="stat-card"><div class="stat-label">支払い済み</div><div class="stat-value green" id="s-paid">-</div></div>
-    <div class="stat-card"><div class="stat-label">未払い世帯</div><div class="stat-value red" id="s-unpaid">-</div></div>
-    <div class="stat-card"><div class="stat-label">未払い金額</div><div class="stat-value small" id="s-total">-</div></div>
-  </div>
+  <!-- ===== 各画面コンテンツ ===== -->
+  <div id="screen-container" style="flex:1;overflow-y:auto;">
 
-  <div class="tab-bar">
-    <div class="tab active" id="tab-col" onclick="switchTab('col')">集金</div>
-    <div class="tab" id="tab-od" onclick="switchTab('od')">未払い一覧</div>
-  </div>
+    <!-- メインメニュー -->
+    <div id="screen-menu" style="display:none;">
+      <div class="menu-screen">
+        <div class="menu-welcome">
+          <div class="menu-welcome-title" id="menu-term-title">-</div>
+          <div class="menu-welcome-sub" id="menu-term-sub">-</div>
+        </div>
+        <div class="menu-grid">
+          <div class="menu-card blue" onclick="showScreen('collection')">
+            <div class="menu-card-icon">💰</div>
+            <div class="menu-card-title">自治会費管理</div>
+            <div class="menu-card-sub">集金状況の確認・受領登録</div>
+            <div id="menu-badge-unpaid"></div>
+          </div>
+          <div class="menu-card purple" onclick="showScreen('residents')">
+            <div class="menu-card-icon">👥</div>
+            <div class="menu-card-title">住人情報管理</div>
+            <div class="menu-card-sub">氏名・備考の更新</div>
+          </div>
+          <div class="menu-card green" onclick="showScreen('ledger')">
+            <div class="menu-card-icon">📊</div>
+            <div class="menu-card-title">出納連携</div>
+            <div class="menu-card-sub">集金分を収支に反映</div>
+            <div id="menu-badge-ledger"></div>
+          </div>
+          <div class="menu-card orange" onclick="showScreen('expense')">
+            <div class="menu-card-icon">📝</div>
+            <div class="menu-card-title">出金登録</div>
+            <div class="menu-card-sub">公共料金・清掃費・雑費</div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-  <div id="view-col">
-    <div id="loading-view" class="loading"><div class="spinner"></div>データを読み込み中...</div>
-    <div id="floor-view" style="display:none;"></div>
-    <div id="room-view" style="display:none;"></div>
-  </div>
-  <div id="view-od" style="display:none;"></div>
-</div>
+    <!-- 自治会費管理 -->
+    <div id="screen-collection" style="display:none;">
+      <div class="term-bar">
+        <button class="term-arrow" id="btn-prev" onclick="changeView(-1)">‹</button>
+        <div class="term-center">
+          <div class="term-name" id="term-name"></div>
+          <div class="term-hint" id="term-hint"></div>
+        </div>
+        <button class="term-arrow" id="btn-next" onclick="changeView(1)">›</button>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-label">支払い済み</div><div class="stat-value green" id="s-paid">-</div></div>
+        <div class="stat-card"><div class="stat-label">未払い世帯</div><div class="stat-value red" id="s-unpaid">-</div></div>
+        <div class="stat-card"><div class="stat-label">未払い金額</div><div class="stat-value small" id="s-total">-</div></div>
+      </div>
+      <div class="tab-bar">
+        <div class="tab active" id="tab-col" onclick="switchTab('col')">集金</div>
+        <div class="tab" id="tab-od" onclick="switchTab('od')">未払い一覧</div>
+      </div>
+      <div id="view-col">
+        <div id="loading-view" class="loading"><div class="spinner"></div>データを読み込み中...</div>
+        <div id="floor-view" style="display:none;"></div>
+        <div id="room-view" style="display:none;"></div>
+      </div>
+      <div id="view-od" style="display:none;"></div>
+    </div>
 
-</div><!-- /.app -->
+    <!-- 住人情報管理 -->
+    <div id="screen-residents" style="display:none;">
+      <div class="resident-search">
+        <input type="text" id="resident-search-input" placeholder="部屋番号・氏名で検索..." oninput="renderResidentList()">
+      </div>
+      <div id="resident-list"></div>
+    </div>
+
+    <!-- 出納連携 -->
+    <div id="screen-ledger" style="display:none;">
+      <div class="ledger-section">
+        <div class="ledger-summary" id="ledger-summary">
+          <div class="ledger-summary-title" id="ledger-term-title">集計中...</div>
+          <div id="ledger-rows"></div>
+          <button class="ledger-sync-btn" id="ledger-sync-btn" onclick="doLedgerSync()" disabled>
+            収支記録に反映する
+          </button>
+        </div>
+        <div class="ledger-detail">
+          <div class="ledger-detail-title">当期受領内訳（未反映分）</div>
+          <div id="ledger-detail-rows"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 出金登録 -->
+    <div id="screen-expense" style="display:none;">
+      <div class="finance-section">
+        <h3>出金を登録する</h3>
+        <div class="form-group">
+          <label class="form-label">区分</label>
+          <select class="form-select" id="exp-type">
+            <option value="公共料金">公共料金</option>
+            <option value="清掃費">清掃費</option>
+            <option value="雑費">雑費</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">項目（よく使うものをタップ）</label>
+          <div class="quick-items" id="quick-items"></div>
+          <input type="text" class="form-input" id="exp-item" placeholder="項目名を入力" style="margin-top:6px;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">金額（円）</label>
+          <input type="number" class="form-input" id="exp-amount" placeholder="0" inputmode="numeric">
+        </div>
+        <div class="form-group">
+          <label class="form-label">日付</label>
+          <input type="date" class="form-input" id="exp-date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">備考（任意）</label>
+          <input type="text" class="form-input" id="exp-note" placeholder="備考">
+        </div>
+        <button class="submit-btn" onclick="submitExpense()" id="exp-submit-btn">出金を登録する</button>
+
+        <div class="finance-history" id="expense-history">
+          <div class="ledger-detail-title" style="margin-bottom:10px;">今期の出金履歴</div>
+          <div id="expense-history-list"><div class="empty-state">履歴を読み込み中...</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /screen-container -->
+</div><!-- /main-app -->
 
 <div id="modal-root"></div>
 <div class="toast" id="toast"></div>
@@ -229,19 +440,14 @@ const MONTHLY_FEE = 2500;
 const SKIP_ROOMS  = [105, 106];
 
 // ===================================================
-// 期定義（表示用・切り替え判定用）
+// 期定義
 // ===================================================
-// 表示する期のリスト（← → で切り替え）
 function makeTerm(year, half) {
   const months = half === '前期'
     ? ['4月','5月','6月','7月','8月','9月']
     : ['10月','11月','12月','1月','2月','3月'];
-  const endYM  = half === '前期'
-    ? `${year}/09`
-    : `${year + 1}/03`;
-  const startYM = half === '前期'
-    ? `${year}/04`
-    : `${year}/10`;
+  const endYM  = half === '前期' ? `${year}/09` : `${year + 1}/03`;
+  const startYM = half === '前期' ? `${year}/04` : `${year}/10`;
   return { year, half, months, startYM, endYM };
 }
 const TERMS = [];
@@ -250,8 +456,7 @@ for (let y = 2023; y <= 2028; y++) {
   TERMS.push(makeTerm(y,'後期'));
 }
 const CURRENT_IDX = TERMS.findIndex(t => t.year===2026 && t.half==='前期');
-let viewIdx = CURRENT_IDX; // 表示中の期インデックス
-
+let viewIdx = CURRENT_IDX;
 function viewTerm() { return TERMS[viewIdx]; }
 function termRelation(idx) {
   return idx === CURRENT_IDX ? 'current' : idx < CURRENT_IDX ? 'past' : 'future';
@@ -260,9 +465,185 @@ function termRelation(idx) {
 // ===================================================
 // データ
 // ===================================================
-let residents = [];   // [{room, name, note}]
-let unpaid = {};      // { room: {from:'YYYY/MM', to:'YYYY/MM', longFlag:0|1} }
-let pendingRooms = new Set(); // 変更があった room
+let residents   = [];
+let unpaid      = {};
+let memos       = {}; // { room: 'メモ文字列' }
+let pendingRooms = new Set();
+let financeHistory = [];
+let pendingLedger = []; // 未反映の受領ログ
+
+// ===================================================
+// 画面管理
+// ===================================================
+let currentScreen = 'menu';
+let screenStack   = [];
+let currentFloor  = null;
+let currentTab    = 'col';
+
+function showScreen(name, pushStack = true) {
+  // 全画面非表示
+  ['menu','collection','residents','ledger','expense'].forEach(s => {
+    document.getElementById('screen-' + s).style.display = 'none';
+  });
+  document.getElementById('screen-' + name).style.display = 'block';
+
+  if (pushStack && currentScreen !== name) {
+    screenStack.push(currentScreen);
+  }
+  currentScreen = name;
+
+  // ヘッダー更新
+  updateHeader(name);
+
+  // 集金日バナーはメニューのみ
+  document.getElementById('collection-banner').style.display = name === 'menu' ? 'flex' : 'none';
+
+  // 画面固有の初期化
+  if (name === 'menu')       initMenu();
+  if (name === 'collection') initCollection();
+  if (name === 'residents')  renderResidentList();
+  if (name === 'ledger')     initLedger();
+  if (name === 'expense')    initExpense();
+}
+
+function handleBack() {
+  if (currentScreen === 'collection' && currentFloor !== null) {
+    goHome();
+    return;
+  }
+  const prev = screenStack.pop() || 'menu';
+  showScreen(prev, false);
+}
+
+function updateHeader(name) {
+  const titles = {
+    menu:       '自治会管理システム',
+    collection: '自治会費管理',
+    residents:  '住人情報管理',
+    ledger:     '出納連携',
+    expense:    '出金登録',
+  };
+  document.getElementById('header-title').textContent = titles[name] || '';
+
+  const backBtn = document.getElementById('back-btn');
+  backBtn.className = name !== 'menu' ? 'back-btn show' : 'back-btn';
+  backBtn.textContent = name === 'collection' && currentFloor ? `← ${currentFloor}F` : '← メニュー';
+
+  const actions = document.getElementById('header-actions');
+  if (name === 'collection') {
+    actions.innerHTML = `
+      <button class="switch-term-btn" onclick="confirmSwitchTerm()">期切替</button>
+      <button class="sync-btn synced" id="sync-btn" onclick="doSync()">✓ 同期済</button>`;
+    updateSyncBtn();
+  } else if (name === 'menu') {
+    actions.innerHTML = '';
+  } else {
+    actions.innerHTML = '';
+  }
+}
+
+// ===================================================
+// メニュー初期化
+// ===================================================
+function initMenu() {
+  const t = TERMS[CURRENT_IDX];
+  document.getElementById('menu-term-title').textContent = `${t.year}年度 ${t.half}`;
+  document.getElementById('menu-term-sub').textContent = `${t.startYM} 〜 ${t.endYM}`;
+
+  // 未払いバッジ
+  const unpaidCount = residents.filter(r => !SKIP_ROOMS.includes(r.room) && hasUnpaid(r.room)).length;
+  const badge = document.getElementById('menu-badge-unpaid');
+  if (unpaidCount > 0) {
+    badge.innerHTML = `<span class="menu-badge red">${unpaidCount}件 未払い</span>`;
+  } else {
+    badge.innerHTML = '';
+  }
+
+  // 未反映バッジ
+  const ledgerBadge = document.getElementById('menu-badge-ledger');
+  if (pendingLedger.length > 0) {
+    ledgerBadge.innerHTML = `<span class="menu-badge yellow">${pendingLedger.length}件 未反映</span>`;
+  } else {
+    ledgerBadge.innerHTML = '';
+  }
+
+  // 集金日バナー
+  renderCollectionBanner();
+}
+
+// ===================================================
+// 集金日計算
+// ===================================================
+function getNthThursday(year, month, n) {
+  // その月のn番目の木曜日（1-indexed）
+  const d = new Date(year, month - 1, 1);
+  const firstThursday = d.getDay() <= 4
+    ? 1 + (4 - d.getDay())
+    : 1 + (11 - d.getDay());
+  const result = new Date(year, month - 1, firstThursday + (n - 1) * 7);
+  return result;
+}
+
+function getCollectionDays(term) {
+  // 前期 4-9月、後期 10-3月 それぞれ毎月第4木曜
+  const days = [];
+  const [sy, sm] = term.startYM.split('/').map(Number);
+  for (let i = 0; i < 6; i++) {
+    let m = sm + i, y = sy;
+    if (m > 12) { m -= 12; y++; }
+    const thu = getNthThursday(y, m, 4);
+    // 前期: 奇数月=1-5F, 偶数月=6-11F
+    // 後期: 奇数月=1-5F, 偶数月=6-11F（月の絶対値で判断）
+    const floors = m % 2 === 1 ? '1〜5階' : '6〜11階';
+    days.push({ date: thu, floors, month: m, year: y });
+  }
+  return days;
+}
+
+function renderCollectionBanner() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const term = TERMS[CURRENT_IDX];
+  const days = getCollectionDays(term);
+
+  // 今日以降で一番近い集金日を探す
+  const upcoming = days.filter(d => d.date >= today).sort((a, b) => a.date - b.date);
+  if (upcoming.length === 0) {
+    document.getElementById('collection-banner').style.display = 'none';
+    return;
+  }
+
+  const next = upcoming[0];
+  const diff = Math.round((next.date - today) / (1000 * 60 * 60 * 24));
+  const isToday = diff === 0;
+
+  const banner = document.getElementById('collection-banner');
+  banner.className = 'collection-banner' + (isToday ? ' today' : '');
+  banner.style.display = 'flex';
+
+  const label = document.getElementById('banner-label');
+  const dateEl = document.getElementById('banner-date');
+  const floorEl = document.getElementById('banner-floor');
+
+  label.textContent = isToday ? '🔔 今日は集金日！' : `次回集金日（あと${diff}日）`;
+  label.style.color = isToday ? '#92400e' : 'var(--blue)';
+
+  const dateStr = `${next.year}/${String(next.month).padStart(2,'0')}/${String(next.date.getDate()).padStart(2,'0')} (木) 19:30〜`;
+  dateEl.textContent = dateStr;
+  dateEl.className = 'banner-date' + (isToday ? ' today' : '');
+
+  floorEl.textContent = next.floors;
+}
+
+// ===================================================
+// 自治会費管理 初期化
+// ===================================================
+function initCollection() {
+  currentFloor = null;
+  document.getElementById('back-btn').textContent = '← メニュー';
+  renderAll();
+  // ヘッダーに同期ボタン追加済み
+}
 
 // ===================================================
 // ヘルパー：年月操作
@@ -283,7 +664,6 @@ function addMonths(ym, n) {
   while (m < 1)  { m += 12; y--; }
   return `${y}/${String(m).padStart(2,'0')}`;
 }
-// From〜Toの月数（From=To なら1、From>To なら0以下）
 function monthCount(from, to) {
   const [fy,fm] = from.split('/').map(Number);
   const [ty,tm] = to.split('/').map(Number);
@@ -295,48 +675,24 @@ function hasUnpaid(room) {
   const t = viewTerm();
   return t.months.some((_, i) => monthStatus(room, i) === 'unpaid');
 }
-
-function hasPrepaid(room) {
-  const u = unpaid[room];
-  if (!u) return false;
-  const t = viewTerm();
-  // 表示期の全月がpaid（前払い済み）かつfutureでない
-  return t.months.every((_, i) => monthStatus(room, i) === 'paid')
-    && ymToNum(u.from) > ymToNum(t.endYM);
-}
-// 指定年月が未払い期間内かどうか
-function isUnpaidMonth(room, ym) {
-  if (!hasUnpaid(room)) return false;
-  const u = unpaid[room];
-  return ymToNum(ym) >= ymToNum(u.from) && ymToNum(ym) <= ymToNum(u.to);
-}
-// 表示中の期の各月のステータス
-// 戻り値:
-//   'paid'   → 支払い済み（ymN < fromN）
-//   'unpaid' → 未払い（fromN <= ymN <= toN）
-//   'future' → まだ集金対象外（ymN > toN）
 function monthStatus(room, monthIdx) {
   const t   = viewTerm();
   const ym  = termMonthYM(t, monthIdx);
   const u   = unpaid[room];
   if (!u) return 'future';
-
   const ymN   = ymToNum(ym);
   const fromN = ymToNum(u.from);
   const toN   = ymToNum(u.to);
-
-  if (ymN < fromN)  return 'paid';    // 支払い済み
-  if (ymN <= toN)   return 'unpaid';  // 未払い
-  return 'future';                    // 集金対象外（まだ）
+  if (ymN < fromN)  return 'paid';
+  if (ymN <= toN)   return 'unpaid';
+  return 'future';
 }
-// 期の月インデックスをYYYY/MMに変換
 function termMonthYM(term, idx) {
   const [sy, sm] = term.startYM.split('/').map(Number);
   let m = sm + idx, y = sy;
   while (m > 12) { m -= 12; y++; }
   return `${y}/${String(m).padStart(2,'0')}`;
 }
-
 function getRoomName(room) {
   const r = residents.find(r => r.room == room);
   return r ? r.name : '';
@@ -346,9 +702,12 @@ function getRoomsByFloor(f) {
     .map(r => r.room)
     .filter(r => Math.floor(r/100) === f && !SKIP_ROOMS.includes(r));
 }
+function calcLongFlag(from, to) {
+  return monthCount(from, to) >= 10 ? 1 : 0;
+}
 
 // ===================================================
-// 受領操作（月をまとめて受領）
+// 受領操作
 // ===================================================
 function receiveMonth(room, monthIdx) {
   const t   = viewTerm();
@@ -357,18 +716,31 @@ function receiveMonth(room, monthIdx) {
   if (!u) return;
   const ymN   = ymToNum(ym);
   const fromN = ymToNum(u.from);
-
-  // 既に受領済み（ymN < fromN）の場合は無視
   if (ymN < fromN) return;
 
-  // From〜ym まで一括受領（未払い・未集金どちらでも対応）
-  // Toは受領した月まで縮める（前払いの場合はToも更新）
   const newFrom = addMonths(ym, 1);
-  // Toは現在のToとymの大きい方を維持
   const newTo = ymToNum(u.to) >= ymN ? u.to : ym;
   unpaid[room] = { from: newFrom, to: newTo, longFlag: calcLongFlag(newFrom, newTo) };
   pendingRooms.add(room);
-  updateSyncBtn(); updateStats();
+
+  // 受領ログ追加
+  const today = new Date();
+  const todayYM = `${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,'0')}`;
+  // from〜ymの全月をログ
+  let cur = u.from;
+  while (ymToNum(cur) <= ymN) {
+    pendingLedger.push({
+      room,
+      ym: cur,
+      type: ymToNum(cur) < ymToNum(todayYM) ? '滞納分' : '当期分',
+      amount: MONTHLY_FEE,
+      receivedAt: today.toISOString().slice(0,10)
+    });
+    cur = addMonths(cur, 1);
+  }
+
+  updateSyncBtn();
+  updateStats();
   if (currentFloor !== null) renderRoomList(currentFloor);
   showToast(`${room}号室 〜${ym} 受領しました`);
 }
@@ -382,35 +754,27 @@ function unreceiveMonth(room, monthIdx) {
   if (ymN >= ymToNum(u.from)) return;
   unpaid[room] = { from: ym, to: u.to, longFlag: calcLongFlag(ym, u.to) };
   pendingRooms.add(room);
-  updateSyncBtn(); updateStats();
+  // ログから取り消し
+  pendingLedger = pendingLedger.filter(l => !(l.room == room && ymToNum(l.ym) >= ymN));
+  updateSyncBtn();
+  updateStats();
   if (currentFloor !== null) renderRoomList(currentFloor);
   showToast(`${room}号室 ${ym} 未払いに戻しました`);
 }
 
 function toggleMonth(room, monthIdx) {
   const status = monthStatus(room, monthIdx);
-  if (status === 'unpaid' || status === 'future') {
-    // 未払いまたは未集金月をタップ → 受領（前払い対応）
-    receiveMonth(room, monthIdx);
-  } else if (status === 'paid') {
-    // 支払い済みをタップ → 未払いに戻す
-    unreceiveMonth(room, monthIdx);
-  }
-}
-
-function calcLongFlag(from, to) {
-  const mc = monthCount(from, to);
-  return mc >= 10 ? 1 : 0;
+  if (status === 'unpaid' || status === 'future') receiveMonth(room, monthIdx);
+  else if (status === 'paid') unreceiveMonth(room, monthIdx);
 }
 
 // ===================================================
-// 期切り替え確認
+// 期切り替え
 // ===================================================
 function confirmSwitchTerm() {
   const cur = TERMS[CURRENT_IDX];
   const next = TERMS[CURRENT_IDX + 1];
   if (!next) { showToast('次の期がありません'); return; }
-
   document.getElementById('modal-root').innerHTML = `
     <div class="overlay">
       <div class="confirm-modal">
@@ -434,19 +798,14 @@ async function doSwitchTerm(newTermEnd) {
   closeModal();
   showToast('期を切り替え中...');
   try {
-    // 全員のToを更新・Fromは未払いなし→次期開始月に
-    const nextStart = addMonths(newTermEnd, -5); // 後期なら10月、前期なら4月
+    const nextStart = addMonths(newTermEnd, -5);
     Object.keys(unpaid).forEach(room => {
       const u = unpaid[room];
-      // 現在未払いなし（From > To）の場合：Fromを新期開始月に
-      if (monthCount(u.from, u.to) < 1) {
-        unpaid[room].from = nextStart;
-      }
+      if (monthCount(u.from, u.to) < 1) unpaid[room].from = nextStart;
       unpaid[room].to = newTermEnd;
       unpaid[room].longFlag = calcLongFlag(unpaid[room].from, newTermEnd);
       pendingRooms.add(Number(room));
     });
-    // GASに期切り替えを通知
     if (navigator.onLine) {
       await gasPost({ action: 'switchTerm', newTermEnd });
       await syncToGAS();
@@ -463,16 +822,20 @@ async function doSwitchTerm(newTermEnd) {
 // IndexedDB
 // ===================================================
 let db = null;
-const DB_NAME = 'jichikai_v2', DB_VER = 1;
+const DB_NAME = 'jichikai_v3', DB_VER = 1;
 
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VER);
     req.onupgradeneeded = e => {
       const d = e.target.result;
-      ['residents','unpaid','pending'].forEach(name => {
+      ['residents','unpaid','memos','pending_ledger'].forEach(name => {
         if (!d.objectStoreNames.contains(name)) {
-          d.createObjectStore(name, { keyPath: name === 'pending' ? 'id' : (name === 'residents' ? 'room' : 'room'), autoIncrement: name === 'pending' });
+          if (name === 'pending_ledger') {
+            d.createObjectStore(name, { autoIncrement: true, keyPath: 'id' });
+          } else {
+            d.createObjectStore(name, { keyPath: 'room' });
+          }
         }
       });
     };
@@ -506,10 +869,6 @@ function dbClear(store) {
 // ===================================================
 // GAS通信
 // ===================================================
-// ===================================================
-// GAS通信
-// ===================================================
-// JSONP方式でGASと通信（CORS回避）
 function gasGet(params) {
   return new Promise((resolve, reject) => {
     const callbackName = 'gasCallback_' + Date.now();
@@ -539,11 +898,9 @@ function gasGet(params) {
 }
 
 async function gasPost(data) {
-  // POST はフォームエンコードで送信
   return new Promise((resolve, reject) => {
     const callbackName = 'gasCallback_' + Date.now();
     const script = document.createElement('script');
-    // POSTデータをGETパラメータとして送信（GAS側で対応）
     const p = new URLSearchParams();
     p.append('callback', callbackName);
     p.append('postData', JSON.stringify(data));
@@ -573,7 +930,7 @@ async function gasPost(data) {
 // データロード
 // ===================================================
 async function loadAll() {
-  showLoading(true);
+  showLoadingView(true);
   try {
     const [resData, unpaidData] = await Promise.all([
       gasGet({ action:'getResidents' }),
@@ -590,8 +947,8 @@ async function loadAll() {
     await dbPutAll('unpaid', Object.entries(unpaid).map(([room,v]) => ({ room:Number(room),...v })));
     pendingRooms.clear();
     updateSyncBtn();
-    showLoading(false);
-    renderAll();
+    showLoadingView(false);
+    initMenu();
   } catch(e) {
     await loadFromLocal();
   }
@@ -603,11 +960,24 @@ async function loadFromLocal() {
     const ul = await dbGetAll('unpaid');
     unpaid = {};
     ul.forEach(r => { unpaid[r.room] = { from:r.from, to:r.to, longFlag:r.longFlag }; });
-    showLoading(false);
-    renderAll();
+    const ml = await dbGetAll('memos');
+    memos = {};
+    ml.forEach(m => { memos[m.room] = m.memo; });
+    const pl = await dbGetAll('pending_ledger');
+    pendingLedger = pl;
+    showLoadingView(false);
+    initMenu();
   } catch(e) {
-    document.getElementById('loading-view').innerHTML =
-      '<div style="padding:24px;color:#dc2626;">データの読み込みに失敗しました。Wi-Fi接続後に再読み込みしてください。</div>';
+    showLoadingView(false);
+  }
+}
+
+function showLoadingView(show) {
+  const lv = document.getElementById('loading-view');
+  if (lv) lv.style.display = show ? 'flex' : 'none';
+  if (!show) {
+    const fv = document.getElementById('floor-view');
+    if (fv && currentScreen === 'collection') fv.style.display = 'block';
   }
 }
 
@@ -618,7 +988,7 @@ async function doSync() {
   if (!navigator.onLine) { showToast('オフライン中です'); return; }
   if (pendingRooms.size === 0) { showToast('同期済みです'); return; }
   const btn = document.getElementById('sync-btn');
-  btn.textContent = '同期中...';
+  if (btn) btn.textContent = '同期中...';
   try {
     await syncToGAS();
     showToast('✓ スプレッドシートに同期しました');
@@ -636,6 +1006,12 @@ async function syncToGAS() {
     longFlag: unpaid[room].longFlag
   }));
   await gasPost({ action:'syncUnpaid', records });
+  // 受領ログもGASに送信
+  if (pendingLedger.length > 0) {
+    await gasPost({ action:'addReceiptLogs', logs: pendingLedger });
+    await dbClear('pending_ledger');
+    pendingLedger = [];
+  }
   await dbClear('unpaid');
   await dbPutAll('unpaid', Object.entries(unpaid).map(([room,v]) => ({ room:Number(room),...v })));
   pendingRooms.clear();
@@ -644,6 +1020,7 @@ async function syncToGAS() {
 
 function updateSyncBtn() {
   const btn = document.getElementById('sync-btn');
+  if (!btn) return;
   if (pendingRooms.size === 0) {
     btn.className = 'sync-btn synced'; btn.textContent = '✓ 同期済';
   } else {
@@ -652,11 +1029,8 @@ function updateSyncBtn() {
 }
 
 // ===================================================
-// レンダリング
+// 集金管理レンダリング
 // ===================================================
-let currentFloor = null;
-let currentTab   = 'col';
-
 function renderAll() {
   renderTermBar();
   updateStats();
@@ -681,24 +1055,12 @@ function renderTermBar() {
 function updateStats() {
   const rooms = residents.map(r => r.room).filter(r => !SKIP_ROOMS.includes(r));
   const t = viewTerm();
-
-  // 表示中の期で未払い月数を集計
-  let totalPaidMonths = 0, totalUnpaidMonths = 0;
-  rooms.forEach(r => {
-    t.months.forEach((_, i) => {
-      if (monthStatus(r, i) === 'paid') totalPaidMonths++;
-      else totalUnpaidMonths++;
-    });
-  });
-
   const paidCount   = rooms.filter(r => !hasUnpaid(r)).length;
   const unpaidCount = rooms.filter(r => hasUnpaid(r)).length;
-  // 表示期の未払い月数×月額で金額集計
   const totalAmt = rooms.reduce((s, r) => {
     const unpaidMonths = t.months.filter((_, i) => monthStatus(r, i) === 'unpaid').length;
     return s + unpaidMonths * MONTHLY_FEE;
   }, 0);
-
   document.getElementById('s-paid').textContent   = paidCount;
   document.getElementById('s-unpaid').textContent = unpaidCount;
   document.getElementById('s-total').textContent  = '¥' + totalAmt.toLocaleString();
@@ -709,14 +1071,6 @@ function updateStats() {
 
 function floorStatus(f) {
   const rooms = getRoomsByFloor(f);
-  // 未来の期は全室「未集金」扱い（前払いした人は除く）
-  if (termRelation(viewIdx) === 'future') {
-    const allPrepaid = rooms.every(r => {
-      const t = viewTerm();
-      return t.months.every((_, i) => monthStatus(r, i) === 'paid');
-    });
-    return allPrepaid ? 'all-paid' : 'has-unpaid';
-  }
   const anyLong   = rooms.some(r => unpaid[r] && unpaid[r].longFlag === 1 && hasUnpaid(r));
   const anyUnpaid = rooms.some(r => hasUnpaid(r));
   if (anyLong)   return 'has-unpaid-long';
@@ -729,8 +1083,8 @@ function renderFloorGrid() {
   for (let f = 1; f <= 11; f++) {
     const rooms = getRoomsByFloor(f);
     if (rooms.length === 0) continue;
-    const paid   = rooms.filter(r => !hasUnpaid(r)).length;
-    const st     = floorStatus(f);
+    const paid = rooms.filter(r => !hasUnpaid(r)).length;
+    const st   = floorStatus(f);
     html += `<div class="floor-card ${st}" onclick="openFloor(${f})">
       <div class="floor-num">${f}F</div>
       <div class="floor-stat">${paid}/${rooms.length}室 済</div>
@@ -742,7 +1096,7 @@ function renderFloorGrid() {
 
 function openFloor(f) {
   currentFloor = f;
-  document.getElementById('back-btn').classList.add('show');
+  document.getElementById('back-btn').textContent = `← ${f}F`;
   document.getElementById('header-title').textContent = `${f}F 集金`;
   document.getElementById('floor-view').style.display = 'none';
   document.getElementById('room-view').style.display  = 'block';
@@ -751,8 +1105,8 @@ function openFloor(f) {
 
 function goHome() {
   currentFloor = null;
-  document.getElementById('back-btn').classList.remove('show');
-  document.getElementById('header-title').textContent = '自治会集金管理';
+  document.getElementById('back-btn').textContent = '← メニュー';
+  document.getElementById('header-title').textContent = '自治会費管理';
   document.getElementById('room-view').style.display  = 'none';
   document.getElementById('floor-view').style.display = 'block';
   renderFloorGrid();
@@ -763,12 +1117,14 @@ function renderRoomList(f) {
   const t     = viewTerm();
   let html    = '';
   rooms.forEach(r => {
-    const u        = unpaid[r] || {};
-    const isLong   = u.longFlag === 1 && hasUnpaid(r);
+    const u      = unpaid[r] || {};
+    const isLong = u.longFlag === 1 && hasUnpaid(r);
+    const memo   = memos[r] || '';
     html += `<div class="room-row">
-      <div class="room-info">
+      <div class="room-info" onclick="openModal(${r})" style="cursor:pointer;">
         <div class="room-num">${r}</div>
         <div class="room-name">${getRoomName(r)}</div>
+        ${memo ? `<div style="font-size:9px;color:var(--orange);margin-top:1px;">📝</div>` : ''}
       </div>
       <div class="months-row">`;
     t.months.forEach((m, i) => {
@@ -790,103 +1146,39 @@ function renderUnpaidList() {
   const wrap  = document.getElementById('view-od');
   const t     = viewTerm();
   const rooms = residents.map(r => r.room).filter(r => !SKIP_ROOMS.includes(r) && hasUnpaid(r));
-
   if (rooms.length === 0) {
-    wrap.innerHTML = '<p style="padding:24px 16px;color:var(--text2);font-size:14px;">未払いはありません</p>';
+    wrap.innerHTML = '<p style="padding:24px 16px;color:var(--text2);font-size:14px;">未払いはありません 🎉</p>';
     return;
   }
-
-  // 長期未払い→通常の順にソート
   rooms.sort((a,b) => {
     const al = unpaid[a]?.longFlag || 0;
     const bl = unpaid[b]?.longFlag || 0;
     if (al !== bl) return bl - al;
     return a - b;
   });
-
   let html = '<div style="padding-top:8px;">';
   rooms.forEach(r => {
     const u = unpaid[r];
-    // 表示期の未払い月数
     const unpaidMonths = t.months.filter((_, i) => monthStatus(r, i) === 'unpaid');
     const mc    = unpaidMonths.length;
     const amt   = mc * MONTHLY_FEE;
     const isLong = u.longFlag === 1;
-    // 総未払い月数（From〜To全体）
     const totalMc = Math.max(0, monthCount(u.from, u.to));
+    const memo = memos[r] || '';
     html += `<div class="unpaid-item ${isLong?'long':''}" onclick="openModal(${r})">
-      <div>
+      <div style="flex:1;">
         <div class="unpaid-room">${r}号室 ${getRoomName(r)}${isLong?'<span class="long-badge">長期</span>':''}</div>
         <div class="unpaid-detail">
           ${t.year}年度${t.half}: ${unpaidMonths.join('・')} 未払い
           ${totalMc > mc ? `（累計${totalMc}ヶ月）` : ''}
         </div>
+        ${memo ? `<div style="font-size:11px;color:var(--orange);margin-top:3px;">📝 ${memo}</div>` : ''}
       </div>
       <div class="unpaid-amount">¥${amt.toLocaleString()}</div>
     </div>`;
   });
   html += '</div>';
   wrap.innerHTML = html;
-}
-
-// ===================================================
-// モーダル（部屋詳細）
-// ===================================================
-function openModal(room) {
-  const t    = viewTerm();
-  const u    = unpaid[room] || {};
-  const mc   = hasUnpaid(room) ? Math.max(0, monthCount(u.from, u.to)) : 0;
-  const amt  = mc * MONTHLY_FEE;
-
-  let monthsHtml = '<div class="modal-months">';
-  t.months.forEach((m,i) => {
-    const st = monthStatus(room, i);
-    const icon = st==='paid' ? '✓' : st==='unpaid' ? '✗' : '–';
-    monthsHtml += `<div class="modal-mc ${st}" onclick="toggleMonth(${room},${i});refreshModal(${room})">
-      <div class="ml">${m}</div><div class="mi">${icon}</div>
-    </div>`;
-  });
-  monthsHtml += '</div>';
-
-  // 総累計未払い月数
-  const totalMc  = Math.max(0, monthCount(u.from, u.to));
-  const infoHtml = `<div class="modal-info">
-    累計未払い期間: <b>${hasUnpaid(room) ? u.from + ' 〜 ' + u.to : 'なし'}</b><br>
-    累計未払い月数: <b>${totalMc}ヶ月</b>　今期未払い: <b>${mc}ヶ月 / ¥${amt.toLocaleString()}</b>
-    ${u.longFlag===1 ? '<br><span style="color:var(--red);font-size:12px;">⚠ 長期未払い（10ヶ月以上）</span>' : ''}
-  </div>`;
-
-  document.getElementById('modal-root').innerHTML = `
-    <div class="overlay" onclick="if(event.target===this)closeModal()">
-      <div class="modal">
-        <div class="modal-title">${room}号室 ${getRoomName(room)}</div>
-        <div class="modal-sub">月セルをタップで受領（まとめて受領対応）</div>
-        ${infoHtml}${monthsHtml}
-        <button class="modal-close" onclick="closeModal()">閉じる</button>
-      </div>
-    </div>`;
-}
-
-function refreshModal(room) {
-  closeModal(); openModal(room);
-  if (currentFloor !== null) renderRoomList(currentFloor);
-  updateStats();
-}
-function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
-
-// ===================================================
-// 表示期切り替え（← → ）
-// ===================================================
-async function changeView(d) {
-  const ni = viewIdx + d;
-  if (ni < 0 || ni >= TERMS.length) return;
-  viewIdx = ni;
-  currentFloor = null;
-  document.getElementById('back-btn').classList.remove('show');
-  document.getElementById('header-title').textContent = '自治会集金管理';
-  document.getElementById('room-view').style.display  = 'none';
-  document.getElementById('floor-view').style.display = 'block';
-  renderAll();
 }
 
 function switchTab(tab) {
@@ -902,26 +1194,365 @@ function switchTab(tab) {
   }
 }
 
-function showLoading(show) {
-  const lv = document.getElementById('loading-view');
-  if (lv) lv.style.display = show ? 'flex' : 'none';
-  if (!show) {
-    const fv = document.getElementById('floor-view');
-    if (fv) fv.style.display = 'block';
+function changeView(d) {
+  const ni = viewIdx + d;
+  if (ni < 0 || ni >= TERMS.length) return;
+  viewIdx = ni;
+  currentFloor = null;
+  document.getElementById('back-btn').textContent = '← メニュー';
+  document.getElementById('header-title').textContent = '自治会費管理';
+  document.getElementById('room-view').style.display  = 'none';
+  document.getElementById('floor-view').style.display = 'block';
+  renderAll();
+}
+
+// ===================================================
+// モーダル（部屋詳細 + 督促メモ）
+// ===================================================
+function openModal(room) {
+  const t    = viewTerm();
+  const u    = unpaid[room] || {};
+  const mc   = hasUnpaid(room) ? Math.max(0, monthCount(u.from, u.to)) : 0;
+  const amt  = mc * MONTHLY_FEE;
+  const memo = memos[room] || '';
+
+  let monthsHtml = '<div class="modal-months">';
+  t.months.forEach((m,i) => {
+    const st = monthStatus(room, i);
+    const icon = st==='paid' ? '✓' : st==='unpaid' ? '✗' : '–';
+    monthsHtml += `<div class="modal-mc ${st}" onclick="toggleMonth(${room},${i});refreshModal(${room})">
+      <div class="ml">${m}</div><div class="mi">${icon}</div>
+    </div>`;
+  });
+  monthsHtml += '</div>';
+
+  const totalMc = Math.max(0, monthCount(u.from, u.to));
+  const infoHtml = `<div class="modal-info">
+    累計未払い期間: <b>${hasUnpaid(room) ? u.from + ' 〜 ' + u.to : 'なし'}</b><br>
+    累計未払い月数: <b>${totalMc}ヶ月</b>　今期未払い: <b>${mc}ヶ月 / ¥${amt.toLocaleString()}</b>
+    ${u.longFlag===1 ? '<br><span style="color:var(--red);font-size:12px;">⚠ 長期未払い（10ヶ月以上）</span>' : ''}
+  </div>`;
+
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <div class="modal-title">${room}号室 ${getRoomName(room)}</div>
+        <div class="modal-sub">月セルをタップで受領（まとめて受領対応）</div>
+        ${infoHtml}${monthsHtml}
+        <div style="margin-top:10px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;">📝 督促メモ</div>
+          <textarea class="modal-memo" id="modal-memo-input" placeholder="連絡した日時・対応内容など">${memo}</textarea>
+          <button class="memo-save-btn" onclick="saveMemo(${room})">メモを保存</button>
+        </div>
+        <button class="modal-close" onclick="closeModal()">閉じる</button>
+      </div>
+    </div>`;
+}
+
+async function saveMemo(room) {
+  const val = document.getElementById('modal-memo-input').value.trim();
+  memos[room] = val;
+  await dbPutAll('memos', [{ room, memo: val }]);
+  // GASにも保存
+  if (navigator.onLine) {
+    try {
+      await gasPost({ action: 'updateMemo', room, memo: val });
+    } catch(e) { /* オフライン時はローカルのみ */ }
+  }
+  showToast('メモを保存しました');
+  closeModal();
+  if (currentFloor !== null) renderRoomList(currentFloor);
+  if (currentTab === 'od') renderUnpaidList();
+}
+
+function refreshModal(room) {
+  closeModal(); openModal(room);
+  if (currentFloor !== null) renderRoomList(currentFloor);
+  updateStats();
+}
+function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
+
+// ===================================================
+// 住人情報管理
+// ===================================================
+function renderResidentList() {
+  const query = (document.getElementById('resident-search-input')?.value || '').trim().toLowerCase();
+  const list = document.getElementById('resident-list');
+  if (!list) return;
+
+  let html = '';
+  let lastFloor = null;
+
+  const filtered = residents.filter(r => {
+    if (SKIP_ROOMS.includes(r.room)) return false;
+    if (!query) return true;
+    return String(r.room).includes(query) || (r.name||'').toLowerCase().includes(query);
+  });
+
+  filtered.forEach(r => {
+    const floor = Math.floor(r.room / 100);
+    if (floor !== lastFloor) {
+      html += `<div class="floor-label">${floor}階</div>`;
+      lastFloor = floor;
+    }
+    const nameDisp = r.name || '<span style="color:var(--text3);">未確認</span>';
+    const noteDisp = r.note || '';
+    html += `<div class="resident-item" onclick="openResidentEdit(${r.room})">
+      <div class="resident-room">${r.room}</div>
+      <div class="resident-name">${nameDisp}</div>
+      <div class="resident-note">${noteDisp}</div>
+      <div class="resident-edit-icon">›</div>
+    </div>`;
+  });
+
+  if (!html) html = '<div class="empty-state">該当する住人が見つかりません</div>';
+  list.innerHTML = html;
+}
+
+function openResidentEdit(room) {
+  const r = residents.find(r => r.room == room);
+  if (!r) return;
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <div class="modal-title">${room}号室</div>
+        <div class="modal-sub">住人情報を編集</div>
+        <div class="form-group">
+          <label class="form-label">氏名</label>
+          <input type="text" class="form-input" id="edit-name" value="${r.name||''}" placeholder="氏名を入力">
+        </div>
+        <div class="form-group">
+          <label class="form-label">備考</label>
+          <input type="text" class="form-input" id="edit-note" value="${r.note||''}" placeholder="備考（空室・法人名など）">
+        </div>
+        <button class="submit-btn" onclick="saveResident(${room})" style="margin-bottom:8px;">保存する</button>
+        <button class="modal-close" onclick="closeModal()">キャンセル</button>
+      </div>
+    </div>`;
+}
+
+async function saveResident(room) {
+  const name = document.getElementById('edit-name').value.trim();
+  const note = document.getElementById('edit-note').value.trim();
+  const idx = residents.findIndex(r => r.room == room);
+  if (idx < 0) return;
+  residents[idx].name = name;
+  residents[idx].note = note;
+  await dbPutAll('residents', [{ room, name, note }]);
+  if (navigator.onLine) {
+    try {
+      await gasPost({ action: 'updateResident', room, name, note });
+      showToast('✓ 住人情報を更新しました');
+    } catch(e) {
+      showToast('ローカルに保存しました（オンライン時に同期されます）');
+    }
+  } else {
+    showToast('ローカルに保存しました');
+  }
+  closeModal();
+  renderResidentList();
+}
+
+// ===================================================
+// 出納連携
+// ===================================================
+function initLedger() {
+  const t = TERMS[CURRENT_IDX];
+  document.getElementById('ledger-term-title').textContent = `${t.year}年度 ${t.half} 集金まとめ`;
+
+  // pendingLedger を集計
+  const currentTerm = pendingLedger.filter(l => l.type === '当期分');
+  const arrearsPayment = pendingLedger.filter(l => l.type === '滞納分');
+  const currentTotal = currentTerm.reduce((s, l) => s + l.amount, 0);
+  const arrearsTotal = arrearsPayment.reduce((s, l) => s + l.amount, 0);
+  const grandTotal = currentTotal + arrearsTotal;
+
+  let rows = '';
+  if (currentTerm.length > 0) {
+    rows += `<div class="ledger-row"><span>当期分（${currentTerm.length}ヶ月）</span><span>¥${currentTotal.toLocaleString()}</span></div>`;
+  }
+  if (arrearsPayment.length > 0) {
+    rows += `<div class="ledger-row"><span>滞納回収分（${arrearsPayment.length}ヶ月）</span><span>¥${arrearsTotal.toLocaleString()}</span></div>`;
+  }
+  if (grandTotal === 0) {
+    rows = '<div style="font-size:13px;color:var(--text2);padding:8px 0;">未反映の受領記録がありません</div>';
+  }
+  rows += `<div class="ledger-row total"><span>合計</span><span>¥${grandTotal.toLocaleString()}</span></div>`;
+  document.getElementById('ledger-rows').innerHTML = rows;
+
+  const syncBtn = document.getElementById('ledger-sync-btn');
+  syncBtn.disabled = grandTotal === 0 || !navigator.onLine;
+  syncBtn.textContent = navigator.onLine ? '収支記録に反映する' : '（オフライン中）';
+
+  // 部屋ごとの明細
+  const byRoom = {};
+  pendingLedger.forEach(l => {
+    if (!byRoom[l.room]) byRoom[l.room] = { current: 0, arrears: 0 };
+    if (l.type === '当期分') byRoom[l.room].current += l.amount;
+    else byRoom[l.room].arrears += l.amount;
+  });
+
+  let detailHtml = '';
+  Object.entries(byRoom).sort(([a],[b]) => a-b).forEach(([room, v]) => {
+    const name = getRoomName(room);
+    detailHtml += `<div class="ledger-room-row">
+      <span>${room}号室 ${name}</span>
+      <span>
+        ${v.current ? `当期 ¥${v.current.toLocaleString()}` : ''}
+        ${v.arrears ? ` 滞納 ¥${v.arrears.toLocaleString()}` : ''}
+      </span>
+    </div>`;
+  });
+  document.getElementById('ledger-detail-rows').innerHTML = detailHtml || '<div style="font-size:13px;color:var(--text2);padding:8px 0;">なし</div>';
+}
+
+async function doLedgerSync() {
+  if (pendingLedger.length === 0) { showToast('反映する受領記録がありません'); return; }
+  if (!navigator.onLine) { showToast('オフライン中です'); return; }
+
+  const t = TERMS[CURRENT_IDX];
+  const currentTerm = pendingLedger.filter(l => l.type === '当期分');
+  const arrearsPayment = pendingLedger.filter(l => l.type === '滞納分');
+  const today = new Date().toISOString().slice(0,10);
+
+  const records = [];
+  if (currentTerm.length > 0) {
+    records.push({
+      date: today,
+      year: t.year,
+      half: t.half,
+      type: '収入',
+      item: `自治会費（${currentTerm.length}ヶ月分）`,
+      amount: currentTerm.reduce((s,l) => s+l.amount, 0),
+      note: '当期分'
+    });
+  }
+  if (arrearsPayment.length > 0) {
+    records.push({
+      date: today,
+      year: t.year,
+      half: t.half,
+      type: '収入',
+      item: `滞納回収（${arrearsPayment.length}ヶ月分）`,
+      amount: arrearsPayment.reduce((s,l) => s+l.amount, 0),
+      note: '滞納分回収'
+    });
+  }
+
+  try {
+    for (const rec of records) {
+      await gasPost({ action: 'addFinance', record: rec });
+    }
+    await dbClear('pending_ledger');
+    pendingLedger = [];
+    showToast('✓ 収支記録に反映しました');
+    initLedger();
+    initMenu();
+  } catch(e) {
+    showToast('反映に失敗しました');
   }
 }
 
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2200);
+// ===================================================
+// 出金登録
+// ===================================================
+const QUICK_ITEMS = {
+  '公共料金': ['電気料金','集会所 電気料金','水道代','集会所 水道代','ガス代','町会費'],
+  '清掃費':   ['清掃費','ゴミ分別担当費'],
+  '雑費':     ['掃除用具','電球','除草関連','印刷費','害虫駆除薬','コピー代'],
+  'その他':   []
+};
+
+function initExpense() {
+  // 今日の日付をデフォルト設定
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('exp-date').value = today;
+  renderQuickItems();
+  loadExpenseHistory();
 }
 
-window.addEventListener('online',  () => { document.getElementById('offline-banner').style.display='none'; });
-window.addEventListener('offline', () => { document.getElementById('offline-banner').style.display='block'; });
+function renderQuickItems() {
+  const type = document.getElementById('exp-type').value;
+  const items = QUICK_ITEMS[type] || [];
+  const container = document.getElementById('quick-items');
+  container.innerHTML = items.map(item =>
+    `<div class="quick-item" onclick="selectQuickItem(this,'${item}')">${item}</div>`
+  ).join('');
+}
+
+function selectQuickItem(el, item) {
+  document.querySelectorAll('.quick-item').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('exp-item').value = item;
+}
+
+async function submitExpense() {
+  const type   = document.getElementById('exp-type').value;
+  const item   = document.getElementById('exp-item').value.trim();
+  const amount = Number(document.getElementById('exp-amount').value);
+  const date   = document.getElementById('exp-date').value;
+  const note   = document.getElementById('exp-note').value.trim();
+
+  if (!item)   { showToast('項目名を入力してください'); return; }
+  if (!amount || amount <= 0) { showToast('金額を入力してください'); return; }
+  if (!date)   { showToast('日付を入力してください'); return; }
+
+  if (!navigator.onLine) { showToast('オフライン中です。Wi-Fi接続後に登録してください'); return; }
+
+  const btn = document.getElementById('exp-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '登録中...';
+
+  const t = TERMS[CURRENT_IDX];
+  try {
+    await gasPost({
+      action: 'addFinance',
+      record: { date, year: t.year, half: t.half, type: '支出', item: `[${type}] ${item}`, amount, note }
+    });
+    showToast('✓ 出金を登録しました');
+    document.getElementById('exp-item').value   = '';
+    document.getElementById('exp-amount').value = '';
+    document.getElementById('exp-note').value   = '';
+    document.querySelectorAll('.quick-item').forEach(e => e.classList.remove('selected'));
+    loadExpenseHistory();
+  } catch(e) {
+    showToast('登録に失敗しました');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '出金を登録する';
+  }
+}
+
+async function loadExpenseHistory() {
+  const t = TERMS[CURRENT_IDX];
+  const listEl = document.getElementById('expense-history-list');
+  if (!navigator.onLine) {
+    listEl.innerHTML = '<div class="empty-state">オフライン中は履歴を表示できません</div>';
+    return;
+  }
+  try {
+    const data = await gasGet({ action:'getFinance', year: t.year, half: t.half });
+    const records = (data.records || []).filter(r => r.type === '支出');
+    if (records.length === 0) {
+      listEl.innerHTML = '<div class="empty-state">今期の出金記録はありません</div>';
+      return;
+    }
+    listEl.innerHTML = records.reverse().map(r => `
+      <div class="finance-history-item">
+        <div class="fh-left">
+          <div class="fh-date">${r.date}</div>
+          <div class="fh-item">${r.item}<span class="fh-type expense">支出</span></div>
+          ${r.note ? `<div style="font-size:11px;color:var(--text3);">${r.note}</div>` : ''}
+        </div>
+        <div class="fh-amount expense">¥${Number(r.amount).toLocaleString()}</div>
+      </div>`).join('');
+  } catch(e) {
+    listEl.innerHTML = '<div class="empty-state">履歴の読み込みに失敗しました</div>';
+  }
+}
 
 // ===================================================
-// パスワード認証
+// PIN認証
 // ===================================================
 let correctPassword = null;
 let pinCurrent = '';
@@ -930,46 +1561,34 @@ function pinInput(num) {
   if (pinCurrent.length >= 4) return;
   pinCurrent += num;
   updatePinDots();
-  if (pinCurrent.length === 4) {
-    setTimeout(checkPin, 150);
-  }
+  if (pinCurrent.length === 4) setTimeout(checkPin, 150);
 }
-
 function pinDelete() {
   pinCurrent = pinCurrent.slice(0, -1);
   updatePinDots();
   document.getElementById('pin-error').textContent = '';
 }
-
 function updatePinDots() {
   for (let i = 0; i < 4; i++) {
-    const dot = document.getElementById(`dot${i}`);
-    dot.classList.toggle('filled', i < pinCurrent.length);
+    document.getElementById(`dot${i}`).classList.toggle('filled', i < pinCurrent.length);
   }
 }
-
 function checkPin() {
   if (pinCurrent === correctPassword) {
-    // 認証成功
     document.getElementById('pin-screen').style.display = 'none';
-    document.getElementById('main-app').style.display = 'block';
+    document.getElementById('main-app').style.display   = 'block';
     startApp();
   } else {
-    // 認証失敗
     document.getElementById('pin-error').textContent = '暗証番号が違います';
     pinCurrent = '';
     updatePinDots();
-    // 画面を振動させる
     const dots = document.getElementById('pin-dots');
     dots.style.transition = 'transform 0.05s';
     let count = 0;
     const shake = setInterval(() => {
       dots.style.transform = count % 2 === 0 ? 'translateX(8px)' : 'translateX(-8px)';
       count++;
-      if (count > 5) {
-        clearInterval(shake);
-        dots.style.transform = 'translateX(0)';
-      }
+      if (count > 5) { clearInterval(shake); dots.style.transform = 'translateX(0)'; }
     }, 60);
   }
 }
@@ -981,7 +1600,15 @@ async function startApp() {
   } else {
     await loadAll();
   }
+  showScreen('menu', false);
 }
+
+// ===================================================
+// 各種イベント
+// ===================================================
+document.getElementById('exp-type')?.addEventListener('change', renderQuickItems);
+window.addEventListener('online',  () => { document.getElementById('offline-banner').style.display='none'; });
+window.addEventListener('offline', () => { document.getElementById('offline-banner').style.display='block'; });
 
 // ===================================================
 // 起動
@@ -990,22 +1617,18 @@ async function startApp() {
   await openDB();
 
   if (!navigator.onLine) {
-    // オフライン時はパスワード認証スキップ・そのまま起動
     document.getElementById('main-app').style.display = 'block';
     document.getElementById('offline-banner').style.display = 'block';
     await loadFromLocal();
+    showScreen('menu', false);
     return;
   }
 
-  // オンライン時：パスワードをGASから取得して認証画面を表示
   try {
-    showLoading(true);
     const data = await gasGet({ action: 'getPassword' });
     correctPassword = data.password || '0000';
-    showLoading(false);
     document.getElementById('pin-screen').style.display = 'flex';
   } catch(e) {
-    // パスワード取得失敗時はスキップして起動
     document.getElementById('main-app').style.display = 'block';
     await startApp();
   }
