@@ -350,6 +350,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
               </div>
             </div>
           </div>
+          <div class="menu-card green" onclick="showScreen('report')" style="grid-column:1/-1;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div class="menu-card-icon">📊</div>
+              <div>
+                <div class="menu-card-title">会計報告書作成</div>
+                <div class="menu-card-sub">期ごとの収支をGoogleスプレッドシートで自動生成</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -489,6 +498,60 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       </div>
     </div>
 
+    </div>
+
+    <!-- 会計報告書作成 -->
+    <div id="screen-report" style="display:none;">
+      <div class="finance-section">
+        <h3>会計報告書作成</h3>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
+          収支記録をもとに会計報告書をGoogleスプレッドシートで自動生成します。<br>
+          生成後は「自動作成ドキュメント」フォルダに保存されます。
+        </p>
+
+        <div class="form-group">
+          <label class="form-label">対象年度</label>
+          <select class="form-select" id="report-year"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">期</label>
+          <div style="display:flex;gap:8px;">
+            <button class="coldoc-half-btn active" id="report-half-mae" onclick="selectReportHalf('前期')">前期（4〜9月）</button>
+            <button class="coldoc-half-btn" id="report-half-kou" onclick="selectReportHalf('後期')">後期（10〜3月）</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">前期繰越金（円）</label>
+          <input type="number" class="form-input" id="report-carryover" placeholder="0" inputmode="numeric">
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">前期の残高（次期繰越金）を入力してください</div>
+        </div>
+
+        <!-- 集計プレビュー -->
+        <div style="background:var(--gray-l);border-radius:var(--r);padding:12px;margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">📋 収支記録からの集計プレビュー</div>
+          <div id="report-preview"><div style="font-size:12px;color:var(--text3);">読み込み中...</div></div>
+        </div>
+
+        <button class="submit-btn" id="report-submit-btn" onclick="submitCreateReport()">
+          📊 会計報告書を生成する
+        </button>
+
+        <!-- 生成結果 -->
+        <div id="report-result" style="display:none;margin-top:16px;padding:14px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);">
+          <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px;">✓ 会計報告書を生成しました</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="report-result-path"></div>
+          <a id="report-ss-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:6px;">
+            📊 Googleスプレッドシートを開く
+          </a>
+          <a id="report-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;">
+            ⬇️ Excel(.xlsx)でダウンロード
+          </a>
+          <!-- 集計サマリー -->
+          <div id="report-summary" style="margin-top:12px;font-size:12px;color:var(--text2);"></div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /screen-container -->
 </div><!-- /main-app -->
 
@@ -546,7 +609,7 @@ let currentTab    = 'col';
 
 function showScreen(name, pushStack = true) {
   // 全画面非表示
-  ['menu','collection','residents','ledger','expense','coldoc'].forEach(s => {
+  ['menu','collection','residents','ledger','expense','coldoc','report'].forEach(s => {
     document.getElementById('screen-' + s).style.display = 'none';
   });
   document.getElementById('screen-' + name).style.display = 'block';
@@ -569,6 +632,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'ledger')     initLedger();
   if (name === 'expense')    initExpense();
   if (name === 'coldoc')     initColDoc();
+  if (name === 'report')     initReport();
 }
 
 function handleBack() {
@@ -588,6 +652,7 @@ function updateHeader(name) {
     ledger:     '出納連携',
     expense:    '出金登録',
     coldoc:     '集金日程ドキュメント作成',
+    report:     '会計報告書作成',
   };
   document.getElementById('header-title').textContent = titles[name] || '';
 
@@ -1827,12 +1892,147 @@ async function submitCreateDoc() {
   }
 }
 
+// ===================================================
+// 会計報告書作成
+// ===================================================
+let reportSelectedHalf = '前期';
+
+function initReport() {
+  const curYear = TERMS[CURRENT_IDX].year;
+  const sel = document.getElementById('report-year');
+  sel.innerHTML = '';
+  for (let y = curYear - 2; y <= curYear + 1; y++) {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = `${y}年度`;
+    if (y === curYear) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  reportSelectedHalf = TERMS[CURRENT_IDX].half;
+  updateReportHalfBtns();
+  document.getElementById('report-result').style.display = 'none';
+  loadReportPreview();
+  sel.addEventListener('change', loadReportPreview);
+}
+
+function selectReportHalf(half) {
+  reportSelectedHalf = half;
+  updateReportHalfBtns();
+  loadReportPreview();
+}
+
+function updateReportHalfBtns() {
+  document.getElementById('report-half-mae').className =
+    'coldoc-half-btn' + (reportSelectedHalf === '前期' ? ' active' : '');
+  document.getElementById('report-half-kou').className =
+    'coldoc-half-btn' + (reportSelectedHalf === '後期' ? ' active' : '');
+}
+
+async function loadReportPreview() {
+  const year = Number(document.getElementById('report-year').value);
+  const half = reportSelectedHalf;
+  const prev = document.getElementById('report-preview');
+  prev.innerHTML = '<div style="font-size:12px;color:var(--text3);">収支記録を取得中...</div>';
+
+  if (!navigator.onLine) {
+    prev.innerHTML = '<div style="font-size:12px;color:var(--text3);">オフライン中は確認できません</div>';
+    return;
+  }
+  try {
+    const data    = await gasGet({ action: 'getFinance', year, half });
+    const records = data.records || [];
+    const fmtYen  = n => `¥${Number(n).toLocaleString()}`;
+
+    const jichikai = records
+      .filter(r => r.type === '収入' && r.item.includes('自治会費'))
+      .reduce((s,r) => s + Number(r.amount), 0);
+    const hall = records
+      .filter(r => r.type === '収入' && r.item.includes('集会所'))
+      .reduce((s,r) => s + Number(r.amount), 0);
+    const utility = records
+      .filter(r => r.type === '支出' && (r.item.includes('[公共料金]') || r.item.includes('[清掃費]')))
+      .reduce((s,r) => s + Number(r.amount), 0);
+    const misc = records
+      .filter(r => r.type === '支出' && (r.item.includes('[雑費]') || r.item.includes('[その他]')))
+      .reduce((s,r) => s + Number(r.amount), 0);
+
+    prev.innerHTML = `
+      <div style="font-size:12px;">
+        <div style="font-weight:600;color:var(--blue2);margin-bottom:4px;">収入（収支記録より）</div>
+        <div class="ledger-room-row"><span>自治会費</span><span>${fmtYen(jichikai)}</span></div>
+        <div class="ledger-room-row"><span>集会所使用料</span><span>${fmtYen(hall)}</span></div>
+        <div style="font-weight:600;color:var(--red);margin:8px 0 4px;">支出（収支記録より）</div>
+        <div class="ledger-room-row"><span>電気・水道・清掃代等</span><span>${fmtYen(utility)}</span></div>
+        <div class="ledger-room-row"><span>その他（雑費等）</span><span>${fmtYen(misc)}</span></div>
+        ${records.length === 0 ? '<div style="color:var(--red);margin-top:6px;font-size:11px;">⚠ この期の収支記録がありません</div>' : ''}
+      </div>`;
+  } catch(e) {
+    prev.innerHTML = '<div style="font-size:12px;color:var(--red);">取得に失敗しました</div>';
+  }
+}
+
+async function submitCreateReport() {
+  if (!navigator.onLine) { showToast('オフライン中は生成できません'); return; }
+  const year      = Number(document.getElementById('report-year').value);
+  const half      = reportSelectedHalf;
+  const carryover = Number(document.getElementById('report-carryover').value || 0);
+  const btn       = document.getElementById('report-submit-btn');
+
+  btn.disabled = true;
+  btn.textContent = '生成中... しばらくお待ちください';
+  document.getElementById('report-result').style.display = 'none';
+
+  try {
+    const result = await gasPost({ action: 'createAccountingReport', year, half, carryover });
+    if (!result.success) throw new Error(result.error || '生成失敗');
+
+    const s      = result.summary;
+    const fmtYen = n => `¥${Number(n).toLocaleString()}`;
+
+    document.getElementById('report-result').style.display = 'block';
+    document.getElementById('report-result-path').textContent =
+      `保存先: ${result.folderPath}/${result.title}`;
+    document.getElementById('report-ss-link').href     = result.ssUrl;
+    document.getElementById('report-export-link').href = result.exportUrl;
+    document.getElementById('report-summary').innerHTML = `
+      <div style="border-top:1px solid var(--green-b);padding-top:8px;margin-top:4px;">
+        <div style="font-weight:600;margin-bottom:4px;font-size:13px;">集計結果</div>
+        <div class="ledger-room-row"><span>前期繰越金</span><span>${fmtYen(s.carryover)}</span></div>
+        <div class="ledger-room-row"><span>自治会費</span><span>${fmtYen(s.jichikaiTotal)}</span></div>
+        <div class="ledger-room-row"><span>集会所使用料</span><span>${fmtYen(s.hallTotal)}</span></div>
+        <div class="ledger-room-row" style="font-weight:600;border-top:1px solid var(--green-b);padding-top:4px;">
+          <span>収入合計</span><span>${fmtYen(s.incomeTotal)}</span>
+        </div>
+        <div class="ledger-room-row" style="margin-top:6px;"><span>公共料金・清掃費等</span><span>${fmtYen(s.utilityTotal)}</span></div>
+        <div class="ledger-room-row"><span>その他雑費</span><span>${fmtYen(s.miscTotal)}</span></div>
+        <div class="ledger-room-row" style="font-weight:600;border-top:1px solid var(--green-b);padding-top:4px;">
+          <span>支出合計</span><span>${fmtYen(s.expenseTotal)}</span>
+        </div>
+        <div class="ledger-room-row" style="font-weight:700;font-size:15px;margin-top:6px;color:${s.balance>=0?'var(--green)':'var(--red)'};">
+          <span>残高（次期繰越金）</span><span>${fmtYen(s.balance)}</span>
+        </div>
+      </div>`;
+    showToast('✓ 会計報告書を生成しました');
+  } catch(e) {
+    showToast('生成に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📊 会計報告書を生成する';
+  }
+}
+
+// ===================================================
+// トースト通知
+// ===================================================
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
+  t.textContent = msg;
+  t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2200);
 }
 
+// ===================================================
+// 各種イベント
 // ===================================================
 document.getElementById('exp-type')?.addEventListener('change', renderQuickItems);
 window.addEventListener('online',  () => { document.getElementById('offline-banner').style.display='none'; });
