@@ -541,10 +541,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
           <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px;">✓ 会計報告書を生成しました</div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="report-result-path"></div>
           <a id="report-ss-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:6px;">
-            📊 Googleスプレッドシートを開く
+            📄 Googleドキュメントを開く
           </a>
           <a id="report-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;">
-            ⬇️ Excel(.xlsx)でダウンロード
+            ⬇️ Word(.docx)でダウンロード
           </a>
           <!-- 集計サマリー -->
           <div id="report-summary" style="margin-top:12px;font-size:12px;color:var(--text2);"></div>
@@ -1998,7 +1998,7 @@ async function submitCreateReport() {
     document.getElementById('report-result').style.display = 'block';
     document.getElementById('report-result-path').textContent =
       `保存先: ${result.folderPath}/${result.title}`;
-    document.getElementById('report-ss-link').href     = result.ssUrl;
+    document.getElementById('report-ss-link').href = result.docUrl;
     document.getElementById('report-export-link').href = result.exportUrl;
     document.getElementById('report-summary').innerHTML = `
       <div style="border-top:1px solid var(--green-b);padding-top:8px;margin-top:4px;">
