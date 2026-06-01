@@ -43,6 +43,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .banner-date.today{color:#92400e;}
 .offline-banner{background:var(--yellow-l);border-bottom:1px solid var(--yellow-b);padding:8px 24px;font-size:14px;color:var(--yellow);text-align:center;}
 
+/* ===== PIN画面 ===== */
+.pin-screen{position:fixed;inset:0;background:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;}
+.pin-logo{color:rgba(255,255,255,0.3);font-size:56px;margin-bottom:16px;}
+.pin-title{color:var(--white);font-size:26px;font-weight:700;margin-bottom:6px;}
+.pin-sub{color:rgba(255,255,255,0.7);font-size:16px;margin-bottom:32px;}
+.pin-dots{display:flex;gap:16px;margin-bottom:32px;}
+.pin-dot{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,0.3);transition:background 0.15s;}
+.pin-dot.filled{background:var(--white);}
+.pin-error{color:#fca5a5;font-size:15px;margin-bottom:16px;min-height:22px;}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;width:280px;}
+.pin-key{background:rgba(255,255,255,0.15);border:none;border-radius:14px;padding:22px;font-size:26px;font-weight:600;color:var(--white);cursor:pointer;transition:background 0.1s;}
+.pin-key:active{background:rgba(255,255,255,0.35);}
+.pin-key.del{font-size:20px;}
+.pin-key.empty{background:transparent;cursor:default;}
+
 /* ===== メインメニュー ===== */
 .menu-screen{padding:28px 24px;}
 .menu-welcome{margin-bottom:24px;}
