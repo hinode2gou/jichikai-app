@@ -112,10 +112,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .floor-card.all-paid{background:var(--green-l);border-color:var(--green-b);}
 .floor-card.has-unpaid-long{background:var(--red-l);border-color:var(--red-b);}
 .floor-card.has-unpaid{background:var(--yellow-l);border-color:var(--yellow-b);}
+.floor-card.not-collected{background:var(--gray-l);border-color:var(--gray-b);}
 .floor-num{font-size:22px;font-weight:700;}
 .floor-card.all-paid .floor-num{color:var(--green);}
 .floor-card.has-unpaid-long .floor-num{color:var(--red);}
 .floor-card.has-unpaid .floor-num{color:var(--yellow);}
+.floor-card.not-collected .floor-num{color:var(--text3);}
 .floor-stat{font-size:10px;color:var(--text2);margin-top:3px;}
 
 /* 部屋リスト */
@@ -239,6 +241,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .switch-term-btn{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 10px;color:var(--white);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;}
 
 .empty-state{padding:40px 20px;text-align:center;color:var(--text2);font-size:14px;}
+
+/* ===== 集金日程ドキュメント ===== */
+.coldoc-half-btn{flex:1;padding:10px;border:1px solid var(--gray-b);border-radius:8px;font-size:13px;font-weight:500;background:var(--white);color:var(--text2);cursor:pointer;}
+.coldoc-half-btn.active{background:var(--blue-l);border-color:var(--blue-b);color:var(--blue2);font-weight:700;}
+.coldoc-preview-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--gray-b);font-size:13px;}
+.coldoc-preview-row:last-child{border-bottom:none;}
+.coldoc-preview-floors{font-size:11px;padding:2px 7px;border-radius:10px;font-weight:600;}
+.coldoc-preview-floors.low{background:var(--blue-l);color:var(--blue2);}
+.coldoc-preview-floors.high{background:var(--purple-l);color:var(--purple);}
 </style>
 </head>
 <body>
@@ -329,6 +340,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             <div class="menu-card-icon">📝</div>
             <div class="menu-card-title">出金登録</div>
             <div class="menu-card-sub">公共料金・清掃費・雑費</div>
+          </div>
+          <div class="menu-card blue" onclick="showScreen('coldoc')" style="grid-column:1/-1;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div class="menu-card-icon">📄</div>
+              <div>
+                <div class="menu-card-title">集金日程ドキュメント作成</div>
+                <div class="menu-card-sub">期ごとの集金日程をGoogleドキュメントで自動生成</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -425,6 +445,50 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       </div>
     </div>
 
+    <!-- 集金日程ドキュメント作成 -->
+    <div id="screen-coldoc" style="display:none;">
+      <div class="finance-section">
+        <h3>集金日程ドキュメント作成</h3>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
+          期ごとの集金日程（第4木曜日×6回）をGoogleドキュメントとして自動生成します。<br>
+          生成後はGoogleドライブの「自動作成ドキュメント」フォルダに保存されます。
+        </p>
+        <div class="form-group">
+          <label class="form-label">対象年度</label>
+          <select class="form-select" id="coldoc-year"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">期</label>
+          <div style="display:flex;gap:8px;">
+            <button class="coldoc-half-btn active" id="coldoc-half-mae" onclick="selectHalf('前期')">前期（4〜9月）</button>
+            <button class="coldoc-half-btn" id="coldoc-half-kou" onclick="selectHalf('後期')">後期（10〜3月）</button>
+          </div>
+        </div>
+
+        <!-- 日程プレビュー -->
+        <div style="background:var(--gray-l);border-radius:var(--r);padding:12px;margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">📅 生成される日程プレビュー</div>
+          <div id="coldoc-preview"></div>
+        </div>
+
+        <button class="submit-btn" id="coldoc-submit-btn" onclick="submitCreateDoc()">
+          📄 Googleドキュメントを生成する
+        </button>
+
+        <!-- 生成結果 -->
+        <div id="coldoc-result" style="display:none;margin-top:16px;padding:14px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);">
+          <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px;">✓ ドキュメントを生成しました</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="coldoc-result-path"></div>
+          <a id="coldoc-doc-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:6px;">
+            📄 Googleドキュメントを開く
+          </a>
+          <a id="coldoc-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;">
+            ⬇️ Word(.docx)でダウンロード
+          </a>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /screen-container -->
 </div><!-- /main-app -->
 
@@ -482,7 +546,7 @@ let currentTab    = 'col';
 
 function showScreen(name, pushStack = true) {
   // 全画面非表示
-  ['menu','collection','residents','ledger','expense'].forEach(s => {
+  ['menu','collection','residents','ledger','expense','coldoc'].forEach(s => {
     document.getElementById('screen-' + s).style.display = 'none';
   });
   document.getElementById('screen-' + name).style.display = 'block';
@@ -504,6 +568,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'residents')  renderResidentList();
   if (name === 'ledger')     initLedger();
   if (name === 'expense')    initExpense();
+  if (name === 'coldoc')     initColDoc();
 }
 
 function handleBack() {
@@ -522,6 +587,7 @@ function updateHeader(name) {
     residents:  '住人情報管理',
     ledger:     '出納連携',
     expense:    '出金登録',
+    coldoc:     '集金日程ドキュメント作成',
   };
   document.getElementById('header-title').textContent = titles[name] || '';
 
@@ -927,26 +993,57 @@ async function gasPost(data) {
 }
 
 // ===================================================
+// LocalStorageキャッシュ
+// ===================================================
+const LS_KEY_RESIDENTS = 'jk_residents';
+const LS_KEY_UNPAID    = 'jk_unpaid';
+const LS_KEY_TS        = 'jk_cache_ts';
+const CACHE_TTL_MS     = 10 * 60 * 1000; // 10分
+
+function lsSave() {
+  try {
+    localStorage.setItem(LS_KEY_RESIDENTS, JSON.stringify(residents));
+    localStorage.setItem(LS_KEY_UNPAID,    JSON.stringify(unpaid));
+    localStorage.setItem(LS_KEY_TS,        String(Date.now()));
+  } catch(e) { /* quota超えなど無視 */ }
+}
+
+function lsLoad() {
+  try {
+    const r = localStorage.getItem(LS_KEY_RESIDENTS);
+    const u = localStorage.getItem(LS_KEY_UNPAID);
+    if (!r || !u) return false;
+    residents = JSON.parse(r);
+    unpaid    = JSON.parse(u);
+    return true;
+  } catch(e) { return false; }
+}
+
+function lsCacheAge() {
+  const ts = localStorage.getItem(LS_KEY_TS);
+  if (!ts) return Infinity;
+  return Date.now() - Number(ts);
+}
+
+// ===================================================
 // データロード
 // ===================================================
 async function loadAll() {
+  // キャッシュがあれば即座に表示（体感速度改善）
+  const hasCached = lsLoad();
+  if (hasCached) {
+    showLoadingView(false);
+    initMenu();
+    // キャッシュが古い（10分超）場合はバックグラウンドで更新
+    if (lsCacheAge() > CACHE_TTL_MS) {
+      refreshFromGASBackground();
+    }
+    return;
+  }
+  // キャッシュなし → GASから取得（初回のみ）
   showLoadingView(true);
   try {
-    const [resData, unpaidData] = await Promise.all([
-      gasGet({ action:'getResidents' }),
-      gasGet({ action:'getUnpaidList' })
-    ]);
-    residents = resData.residents || [];
-    unpaid = {};
-    (unpaidData.records || []).forEach(r => {
-      unpaid[r.room] = { from: r.from, to: r.to, longFlag: r.longFlag };
-    });
-    await dbClear('residents');
-    await dbClear('unpaid');
-    await dbPutAll('residents', residents);
-    await dbPutAll('unpaid', Object.entries(unpaid).map(([room,v]) => ({ room:Number(room),...v })));
-    pendingRooms.clear();
-    updateSyncBtn();
+    await fetchFromGAS();
     showLoadingView(false);
     initMenu();
   } catch(e) {
@@ -954,12 +1051,45 @@ async function loadAll() {
   }
 }
 
+async function fetchFromGAS() {
+  const [resData, unpaidData] = await Promise.all([
+    gasGet({ action:'getResidents' }),
+    gasGet({ action:'getUnpaidList' })
+  ]);
+  residents = resData.residents || [];
+  unpaid = {};
+  (unpaidData.records || []).forEach(r => {
+    unpaid[r.room] = { from: r.from, to: r.to, longFlag: r.longFlag };
+  });
+  lsSave();
+  await dbClear('residents');
+  await dbClear('unpaid');
+  await dbPutAll('residents', residents);
+  await dbPutAll('unpaid', Object.entries(unpaid).map(([room,v]) => ({ room:Number(room),...v })));
+  pendingRooms.clear();
+  updateSyncBtn();
+}
+
+async function refreshFromGASBackground() {
+  try {
+    await fetchFromGAS();
+    // メニューを静かに更新（トーストなし）
+    if (currentScreen === 'menu') initMenu();
+    if (currentScreen === 'collection') renderAll();
+  } catch(e) { /* バックグラウンド更新失敗は無視 */ }
+}
+
 async function loadFromLocal() {
   try {
-    residents = await dbGetAll('residents');
-    const ul = await dbGetAll('unpaid');
-    unpaid = {};
-    ul.forEach(r => { unpaid[r.room] = { from:r.from, to:r.to, longFlag:r.longFlag }; });
+    // まずLocalStorageを試みる
+    const hasCached = lsLoad();
+    if (!hasCached) {
+      // IndexedDBにフォールバック
+      residents = await dbGetAll('residents');
+      const ul = await dbGetAll('unpaid');
+      unpaid = {};
+      ul.forEach(r => { unpaid[r.room] = { from:r.from, to:r.to, longFlag:r.longFlag }; });
+    }
     const ml = await dbGetAll('memos');
     memos = {};
     ml.forEach(m => { memos[m.room] = m.memo; });
@@ -1071,6 +1201,14 @@ function updateStats() {
 
 function floorStatus(f) {
   const rooms = getRoomsByFloor(f);
+  // 未来の期：全室が前払い済みなら緑、そうでなければ灰色（未集金）
+  if (termRelation(viewIdx) === 'future') {
+    const allPrepaid = rooms.every(r => {
+      const t = viewTerm();
+      return t.months.every((_, i) => monthStatus(r, i) === 'paid');
+    });
+    return allPrepaid ? 'all-paid' : 'not-collected';
+  }
   const anyLong   = rooms.some(r => unpaid[r] && unpaid[r].longFlag === 1 && hasUnpaid(r));
   const anyUnpaid = rooms.some(r => hasUnpaid(r));
   if (anyLong)   return 'has-unpaid-long';
@@ -1604,7 +1742,91 @@ async function startApp() {
 }
 
 // ===================================================
-// 各種イベント
+// 集金日程ドキュメント作成
+// ===================================================
+let coldocSelectedHalf = '前期';
+
+function initColDoc() {
+  // 年度セレクト生成（今年度±2年）
+  const curYear = TERMS[CURRENT_IDX].year;
+  const sel = document.getElementById('coldoc-year');
+  sel.innerHTML = '';
+  for (let y = curYear - 1; y <= curYear + 2; y++) {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = `${y}年度`;
+    if (y === curYear) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  coldocSelectedHalf = TERMS[CURRENT_IDX].half;
+  updateHalfBtns();
+  renderColDocPreview();
+  document.getElementById('coldoc-result').style.display = 'none';
+  sel.addEventListener('change', renderColDocPreview);
+}
+
+function selectHalf(half) {
+  coldocSelectedHalf = half;
+  updateHalfBtns();
+  renderColDocPreview();
+}
+
+function updateHalfBtns() {
+  document.getElementById('coldoc-half-mae').className =
+    'coldoc-half-btn' + (coldocSelectedHalf === '前期' ? ' active' : '');
+  document.getElementById('coldoc-half-kou').className =
+    'coldoc-half-btn' + (coldocSelectedHalf === '後期' ? ' active' : '');
+}
+
+function renderColDocPreview() {
+  const year = Number(document.getElementById('coldoc-year').value);
+  const half = coldocSelectedHalf;
+  const months = half === '前期' ? [4,5,6,7,8,9] : [10,11,12,1,2,3];
+
+  let html = '';
+  months.forEach(m => {
+    const y   = (half === '後期' && m <= 3) ? year + 1 : year;
+    const thu = getNthThursday(y, m, 4);
+    const mm  = String(thu.getMonth() + 1).padStart(2,'0');
+    const dd  = String(thu.getDate()).padStart(2,'0');
+    const dow = ['日','月','火','水','木','金','土'][thu.getDay()];
+    const floors = m % 2 === 1 ? '1〜5階' : '6〜11階';
+    const cls    = m % 2 === 1 ? 'low' : 'high';
+    html += `<div class="coldoc-preview-row">
+      <span>${y}/${mm}/${dd}（${dow}）19:30〜</span>
+      <span class="coldoc-preview-floors ${cls}">${floors}</span>
+    </div>`;
+  });
+  document.getElementById('coldoc-preview').innerHTML = html;
+}
+
+async function submitCreateDoc() {
+  if (!navigator.onLine) { showToast('オフライン中は生成できません'); return; }
+  const year = Number(document.getElementById('coldoc-year').value);
+  const half = coldocSelectedHalf;
+  const btn  = document.getElementById('coldoc-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '生成中... しばらくお待ちください';
+  document.getElementById('coldoc-result').style.display = 'none';
+
+  try {
+    const result = await gasPost({ action: 'createCollectionDoc', year, half });
+    if (!result.success) throw new Error(result.error || '生成失敗');
+
+    document.getElementById('coldoc-result').style.display = 'block';
+    document.getElementById('coldoc-result-path').textContent =
+      `保存先: ${result.folderPath}/${result.title}`;
+    document.getElementById('coldoc-doc-link').href    = result.docUrl;
+    document.getElementById('coldoc-export-link').href = result.exportUrl;
+    showToast('✓ ドキュメントを生成しました');
+  } catch(e) {
+    showToast('生成に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📄 Googleドキュメントを生成する';
+  }
+}
+
 // ===================================================
 document.getElementById('exp-type')?.addEventListener('change', renderQuickItems);
 window.addEventListener('online',  () => { document.getElementById('offline-banner').style.display='none'; });
