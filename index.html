@@ -21,14 +21,14 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif;background:#f3f4f6;color:var(--text);}
-.app{max-width:700px;margin:0 auto;background:var(--white);min-height:100vh;display:flex;flex-direction:column;}
+.app{max-width:800px;margin:0 auto;background:var(--white);min-height:100vh;display:flex;flex-direction:column;}
 
 /* ===== ヘッダー ===== */
-.header{background:var(--blue);color:var(--white);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;position:sticky;top:0;z-index:10;}
+.header{background:var(--blue);color:var(--white);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:8px;position:sticky;top:0;z-index:10;}
 .header-left{display:flex;align-items:center;gap:8px;}
 .back-btn{background:rgba(255,255,255,0.2);border:none;border-radius:6px;padding:6px 10px;color:var(--white);font-size:13px;cursor:pointer;display:none;align-items:center;gap:4px;}
 .back-btn.show{display:flex;}
-.header-title{font-size:15px;font-weight:600;}
+.header-title{font-size:17px;font-weight:600;}
 .header-actions{display:flex;gap:6px;align-items:center;}
 .sync-btn{border:none;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;}
 .sync-btn.pending{background:var(--yellow-l);color:var(--yellow);border:1px solid var(--yellow-b);}
@@ -63,7 +63,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .menu-welcome{margin-bottom:20px;}
 .menu-welcome-title{font-size:18px;font-weight:700;color:var(--text);}
 .menu-welcome-sub{font-size:12px;color:var(--text2);margin-top:3px;}
-.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
 .menu-card{border-radius:14px;padding:18px 16px;cursor:pointer;display:flex;flex-direction:column;gap:10px;border:2px solid transparent;transition:transform 0.1s,box-shadow 0.1s;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
 .menu-card:active{transform:scale(0.97);}
 .menu-card.blue{background:var(--blue-l);border-color:var(--blue-b);}
@@ -106,37 +106,37 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .tab.active{border-bottom-color:var(--blue2);color:var(--blue2);}
 
 /* フロアグリッド */
-.floor-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px;}
-.floor-card{border:1px solid var(--gray-b);border-radius:var(--r);padding:14px 8px;text-align:center;cursor:pointer;background:var(--white);box-shadow:0 1px 3px rgba(0,0,0,0.08);}
+.floor-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;padding:14px;}
+.floor-card{border:1px solid var(--gray-b);border-radius:var(--r);padding:18px 10px;text-align:center;cursor:pointer;background:var(--white);box-shadow:0 1px 3px rgba(0,0,0,0.08);}
 .floor-card:active{transform:scale(0.95);}
 .floor-card.all-paid{background:var(--green-l);border-color:var(--green-b);}
 .floor-card.has-unpaid-long{background:var(--red-l);border-color:var(--red-b);}
 .floor-card.has-unpaid{background:var(--yellow-l);border-color:var(--yellow-b);}
 .floor-card.not-collected{background:var(--gray-l);border-color:var(--gray-b);}
-.floor-num{font-size:22px;font-weight:700;}
+.floor-num{font-size:26px;font-weight:700;}
 .floor-card.all-paid .floor-num{color:var(--green);}
 .floor-card.has-unpaid-long .floor-num{color:var(--red);}
 .floor-card.has-unpaid .floor-num{color:var(--yellow);}
 .floor-card.not-collected .floor-num{color:var(--text3);}
-.floor-stat{font-size:10px;color:var(--text2);margin-top:3px;}
+.floor-stat{font-size:12px;color:var(--text2);margin-top:4px;}
 
 /* 部屋リスト */
 .room-section-label{font-size:11px;font-weight:600;color:var(--text2);padding:8px 14px 4px;background:var(--gray-l);border-bottom:1px solid var(--gray-b);}
-.room-row{display:flex;align-items:center;padding:9px 14px;border-bottom:1px solid var(--gray-b);gap:8px;background:var(--white);}
-.room-info{width:72px;flex-shrink:0;}
-.room-num{font-size:13px;font-weight:600;color:var(--text);}
-.room-name{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.months-row{display:flex;gap:3px;flex:1;}
-.mc{flex:1;border-radius:5px;padding:5px 1px;text-align:center;cursor:pointer;border:1px solid var(--gray-b);background:var(--white);transition:transform 0.08s;min-width:0;}
+.room-row{display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid var(--gray-b);gap:10px;background:var(--white);}
+.room-info{width:88px;flex-shrink:0;}
+.room-num{font-size:15px;font-weight:600;color:var(--text);}
+.room-name{font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.months-row{display:flex;gap:5px;flex:1;}
+.mc{flex:1;border-radius:6px;padding:7px 2px;text-align:center;cursor:pointer;border:1px solid var(--gray-b);background:var(--white);transition:transform 0.08s;min-width:0;}
 .mc:active{transform:scale(0.88);}
 .mc.paid{background:var(--green-l);border-color:var(--green-b);}
 .mc.unpaid{background:var(--red-l);border-color:var(--red-b);}
 .mc.future{background:var(--gray-l);border-color:var(--gray-b);opacity:0.5;}
-.mc .ml{font-size:9px;color:var(--text2);}
+.mc .ml{font-size:11px;color:var(--text2);}
 .mc.paid .ml,.mc.paid .mi{color:var(--green);}
 .mc.unpaid .ml,.mc.unpaid .mi{color:var(--red);}
 .mc.future .ml,.mc.future .mi{color:var(--text3);}
-.mc .mi{font-size:11px;color:var(--text3);}
+.mc .mi{font-size:13px;color:var(--text3);}
 .long-flag{font-size:10px;padding:2px 5px;border-radius:4px;background:var(--red-l);color:var(--red);border:1px solid var(--red-b);flex-shrink:0;white-space:nowrap;}
 
 /* 未払いタブ */
@@ -210,7 +210,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .modal-mc.paid{background:var(--green-l);border-color:var(--green-b);}
 .modal-mc.unpaid{background:var(--red-l);border-color:var(--red-b);}
 .modal-mc.future{background:var(--gray-l);border-color:var(--gray-b);opacity:0.5;}
-.modal-mc .ml{font-size:9px;color:var(--text2);}
+.modal.mc .ml{font-size:11px;color:var(--text2);}
 .modal-mc.paid .ml,.modal-mc.paid .mi{color:var(--green);}
 .modal-mc.unpaid .ml,.modal-mc.unpaid .mi{color:var(--red);}
 .modal-mc.future .ml,.modal-mc.future .mi{color:var(--text3);}
