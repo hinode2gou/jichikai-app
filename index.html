@@ -1827,6 +1827,12 @@ async function submitCreateDoc() {
   }
 }
 
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
 // ===================================================
 document.getElementById('exp-type')?.addEventListener('change', renderQuickItems);
 window.addEventListener('online',  () => { document.getElementById('offline-banner').style.display='none'; });
