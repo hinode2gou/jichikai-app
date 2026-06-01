@@ -21,7 +21,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif;background:#f3f4f6;color:var(--text);}
-.app{max-width:800px;margin:0 auto;background:var(--white);min-height:100vh;display:flex;flex-direction:column;}
+.app{max-width:1200px;margin:0 auto;background:var(--white);min-height:100vh;display:flex;flex-direction:column;}
 
 /* ===== ヘッダー ===== */
 .header{background:var(--blue);color:var(--white);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:8px;position:sticky;top:0;z-index:10;}
@@ -123,20 +123,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 /* 部屋リスト */
 .room-section-label{font-size:11px;font-weight:600;color:var(--text2);padding:8px 14px 4px;background:var(--gray-l);border-bottom:1px solid var(--gray-b);}
 .room-row{display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid var(--gray-b);gap:10px;background:var(--white);}
-.room-info{width:88px;flex-shrink:0;}
-.room-num{font-size:15px;font-weight:600;color:var(--text);}
+.room-info{width:100px;flex-shrink:0;}
+.room-num{font-size:16px;font-weight:600;color:var(--text);}
 .room-name{font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .months-row{display:flex;gap:5px;flex:1;}
-.mc{flex:1;border-radius:6px;padding:7px 2px;text-align:center;cursor:pointer;border:1px solid var(--gray-b);background:var(--white);transition:transform 0.08s;min-width:0;}
+.mc{flex:1;border-radius:6px;padding:9px 4px;text-align:center;cursor:pointer;border:1px solid var(--gray-b);background:var(--white);transition:transform 0.08s;min-width:0;}
 .mc:active{transform:scale(0.88);}
 .mc.paid{background:var(--green-l);border-color:var(--green-b);}
 .mc.unpaid{background:var(--red-l);border-color:var(--red-b);}
 .mc.future{background:var(--gray-l);border-color:var(--gray-b);opacity:0.5;}
-.mc .ml{font-size:11px;color:var(--text2);}
+.mc .ml{font-size:13px;color:var(--text2);}
 .mc.paid .ml,.mc.paid .mi{color:var(--green);}
 .mc.unpaid .ml,.mc.unpaid .mi{color:var(--red);}
 .mc.future .ml,.mc.future .mi{color:var(--text3);}
-.mc .mi{font-size:13px;color:var(--text3);}
+.mc .mi{font-size:15px;color:var(--text3);}
 .long-flag{font-size:10px;padding:2px 5px;border-radius:4px;background:var(--red-l);color:var(--red);border:1px solid var(--red-b);flex-shrink:0;white-space:nowrap;}
 
 /* 未払いタブ */
@@ -210,7 +210,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .modal-mc.paid{background:var(--green-l);border-color:var(--green-b);}
 .modal-mc.unpaid{background:var(--red-l);border-color:var(--red-b);}
 .modal-mc.future{background:var(--gray-l);border-color:var(--gray-b);opacity:0.5;}
-.modal.mc .ml{font-size:11px;color:var(--text2);}
+.modal.mc .ml{font-size:13px;color:var(--text2);}
 .modal-mc.paid .ml,.modal-mc.paid .mi{color:var(--green);}
 .modal-mc.unpaid .ml,.modal-mc.unpaid .mi{color:var(--red);}
 .modal-mc.future .ml,.modal-mc.future .mi{color:var(--text3);}
