@@ -578,16 +578,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
         </div>
 
         <button class="submit-btn" id="notice-submit-btn" onclick="submitCreateNotice()" style="background:var(--orange);">
-          ⚠️ 滞納通知書を生成する
+          ⚠️ 滞納通知書を生成する（個別PDF）
         </button>
 
         <!-- 生成結果 -->
         <div id="notice-result" style="display:none;margin-top:16px;padding:14px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);">
-          <div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:8px;">✓ 通知書を生成しました</div>
+          <div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:8px;">✓ 個別PDFを生成しました</div>
           <div style="font-size:13px;color:var(--text2);margin-bottom:10px;" id="notice-result-path"></div>
-          <a id="notice-folder-link" href="#" target="_blank" style="display:block;padding:12px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:14px;font-weight:600;color:var(--green);text-decoration:none;">
+          <a id="notice-folder-link" href="#" target="_blank" style="display:block;padding:12px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:14px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:10px;">
             📁 生成フォルダを開く
           </a>
+          <button id="notice-merge-btn" onclick="submitMergedPdf()" style="width:100%;padding:14px;background:var(--blue2);color:var(--white);border:none;border-radius:var(--r);font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px;">
+            📄 全件まとめPDFを生成する
+          </button>
+          <div id="notice-merge-result" style="display:none;padding:10px;background:var(--blue-l);border:1px solid var(--blue-b);border-radius:8px;font-size:13px;color:var(--blue2);font-weight:600;text-align:center;">
+            ✓ まとめPDFを生成しました
+          </div>
           <div id="notice-result-list" style="margin-top:12px;font-size:13px;color:var(--text2);"></div>
         </div>
       </div>
@@ -2162,6 +2168,25 @@ async function submitCreateNotice() {
   } finally {
     btn.disabled = false;
     btn.textContent = '⚠️ 滞納通知書を生成する';
+  }
+}
+
+async function submitMergedPdf() {
+  if (!navigator.onLine) { showToast('オフライン中は生成できません'); return; }
+  const btn = document.getElementById('notice-merge-btn');
+  btn.disabled = true;
+  btn.textContent = '生成中... しばらくお待ちください';
+  try {
+    const result = await gasPost({ action: 'createDelinquencyMergedPdf' });
+    if (!result.success) throw new Error(result.error || '生成失敗');
+    const el = document.getElementById('notice-merge-result');
+    el.style.display = 'block';
+    el.textContent = result.already ? '✓ まとめPDFはすでに生成済みです' : '✓ まとめPDFを生成しました';
+    showToast(result.message || 'まとめPDFを生成しました');
+  } catch(e) {
+    showToast('生成に失敗しました: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '📄 全件まとめPDFを生成する';
   }
 }
 
