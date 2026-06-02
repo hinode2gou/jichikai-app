@@ -359,6 +359,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
               </div>
             </div>
           </div>
+          <div class="menu-card orange" onclick="showScreen('notice')" style="grid-column:1/-1;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div class="menu-card-icon">⚠️</div>
+              <div>
+                <div class="menu-card-title">滞納通知書作成</div>
+                <div class="menu-card-sub">長期滞納者への通知書をGoogleドキュメントで自動生成</div>
+                <div id="menu-badge-notice"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -552,6 +562,37 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       </div>
     </div>
 
+    <!-- 滞納通知書作成 -->
+    <div id="screen-notice" style="display:none;">
+      <div class="finance-section">
+        <h3>滞納通知書作成</h3>
+        <p style="font-size:14px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
+          長期滞納者（10ヶ月以上）を対象に滞納通知書を自動生成します。<br>
+          個別PDFと全件まとめPDFを「自動作成ドキュメント」フォルダに保存します。
+        </p>
+
+        <!-- 対象者プレビュー -->
+        <div style="background:var(--gray-l);border-radius:var(--r);padding:14px;margin-bottom:16px;">
+          <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px;">⚠️ 現在の長期滞納者</div>
+          <div id="notice-preview"></div>
+        </div>
+
+        <button class="submit-btn" id="notice-submit-btn" onclick="submitCreateNotice()" style="background:var(--orange);">
+          ⚠️ 滞納通知書を生成する
+        </button>
+
+        <!-- 生成結果 -->
+        <div id="notice-result" style="display:none;margin-top:16px;padding:14px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);">
+          <div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:8px;">✓ 通知書を生成しました</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:10px;" id="notice-result-path"></div>
+          <a id="notice-folder-link" href="#" target="_blank" style="display:block;padding:12px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:14px;font-weight:600;color:var(--green);text-decoration:none;">
+            📁 生成フォルダを開く
+          </a>
+          <div id="notice-result-list" style="margin-top:12px;font-size:13px;color:var(--text2);"></div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /screen-container -->
 </div><!-- /main-app -->
 
@@ -609,7 +650,7 @@ let currentTab    = 'col';
 
 function showScreen(name, pushStack = true) {
   // 全画面非表示
-  ['menu','collection','residents','ledger','expense','coldoc','report'].forEach(s => {
+  ['menu','collection','residents','ledger','expense','coldoc','report','notice'].forEach(s => {
     document.getElementById('screen-' + s).style.display = 'none';
   });
   document.getElementById('screen-' + name).style.display = 'block';
@@ -633,6 +674,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'expense')    initExpense();
   if (name === 'coldoc')     initColDoc();
   if (name === 'report')     initReport();
+  if (name === 'notice')     initNotice();
 }
 
 function handleBack() {
@@ -653,6 +695,7 @@ function updateHeader(name) {
     expense:    '出金登録',
     coldoc:     '集金日程ドキュメント作成',
     report:     '会計報告書作成',
+    notice:     '滞納通知書作成',
   };
   document.getElementById('header-title').textContent = titles[name] || '';
 
@@ -696,6 +739,14 @@ function initMenu() {
     ledgerBadge.innerHTML = `<span class="menu-badge yellow">${pendingLedger.length}件 未反映</span>`;
   } else {
     ledgerBadge.innerHTML = '';
+  }
+
+  // 長期滞納バッジ
+  const longCount = Object.values(unpaid).filter(u => u.longFlag === 1).length;
+  const noticeBadge = document.getElementById('menu-badge-notice');
+  if (noticeBadge) {
+    noticeBadge.innerHTML = longCount > 0
+      ? `<span class="menu-badge red">${longCount}件 長期滞納</span>` : '';
   }
 
   // 集金日バナー
@@ -2028,7 +2079,92 @@ async function submitCreateReport() {
 }
 
 // ===================================================
-// トースト通知
+// 滞納通知書作成
+// ===================================================
+function initNotice() {
+  document.getElementById('notice-result').style.display = 'none';
+  renderNoticePreview();
+
+  // メニューのバッジも更新
+  const longCount = residents.filter(r => {
+    const u = unpaid[r.room !== undefined ? r.room : r];
+    return u && u.longFlag === 1;
+  }).length;
+  const badge = document.getElementById('menu-badge-notice');
+  if (badge) {
+    badge.innerHTML = longCount > 0
+      ? `<span class="menu-badge red">${longCount}件 長期滞納</span>` : '';
+  }
+}
+
+function renderNoticePreview() {
+  const prev = document.getElementById('notice-preview');
+  // 長期滞納者をローカルデータから表示
+  const longList = Object.entries(unpaid)
+    .filter(([, u]) => u.longFlag === 1)
+    .sort(([a], [b]) => Number(a) - Number(b));
+
+  if (longList.length === 0) {
+    prev.innerHTML = '<div style="font-size:13px;color:var(--text2);">長期滞納者はいません</div>';
+    document.getElementById('notice-submit-btn').disabled = true;
+    return;
+  }
+
+  const fmtYen = n => `¥${Number(n).toLocaleString()}`;
+  let html = '';
+  longList.forEach(([room, u]) => {
+    const name   = getRoomName(room);
+    const months = Math.max(0, monthCount(u.from, u.to));
+    const amount = months * MONTHLY_FEE;
+    html += `<div class="ledger-room-row">
+      <span style="font-weight:600;">${room}号室 ${name}</span>
+      <span style="color:var(--red);font-size:12px;">${u.from}〜${u.to}（${months}ヶ月 ${fmtYen(amount)}）</span>
+    </div>`;
+  });
+  prev.innerHTML = html;
+  document.getElementById('notice-submit-btn').disabled = false;
+}
+
+async function submitCreateNotice() {
+  if (!navigator.onLine) { showToast('オフライン中は生成できません'); return; }
+  const btn = document.getElementById('notice-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '生成中... しばらくお待ちください';
+  document.getElementById('notice-result').style.display = 'none';
+
+  try {
+    const result = await gasPost({ action: 'createDelinquencyNotices' });
+    if (!result.success) throw new Error(result.error || '生成失敗');
+
+    if (result.count === 0) {
+      showToast('長期滞納者がいません');
+      return;
+    }
+
+    document.getElementById('notice-result').style.display = 'block';
+    document.getElementById('notice-result-path').textContent =
+      `保存先: ${result.folderPath}（${result.count}件）`;
+    document.getElementById('notice-folder-link').href = result.folderUrl;
+
+    const fmtYen = n => `¥${Number(n).toLocaleString()}`;
+    document.getElementById('notice-result-list').innerHTML =
+      '<div style="font-weight:600;margin-bottom:6px;">生成した通知書</div>' +
+      result.rooms.map(r =>
+        `<div class="ledger-room-row">
+          <span>${r.room}号室 ${r.name}</span>
+          <span style="color:var(--red);">${r.months}ヶ月 ${fmtYen(r.amount)}</span>
+        </div>`
+      ).join('');
+
+    showToast(`✓ ${result.count}件の通知書を生成しました`);
+  } catch(e) {
+    showToast('生成に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⚠️ 滞納通知書を生成する';
+  }
+}
+
 // ===================================================
 function showToast(msg) {
   const t = document.getElementById('toast');
