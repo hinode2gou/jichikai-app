@@ -370,6 +370,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             </div>
           </div>
         </div>
+
+        <!-- 滞納通知書一括PDFダウンロード（存在する場合のみ表示）-->
+        <div id="menu-merged-pdf" style="display:none;margin-top:16px;padding:16px;background:var(--red-l);border:1px solid var(--red-b);border-radius:14px;">
+          <div style="font-size:14px;font-weight:700;color:var(--red);margin-bottom:4px;">📥 滞納通知書一括PDF</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="menu-merged-pdf-date"></div>
+          <a id="menu-merged-pdf-link" href="#" target="_blank" style="display:block;padding:12px;background:var(--white);border:1px solid var(--red-b);border-radius:8px;text-align:center;font-size:14px;font-weight:600;color:var(--red);text-decoration:none;">
+            ダウンロード（長期滞納者PDF.pdf）
+          </a>
+        </div>
       </div>
     </div>
 
@@ -567,34 +576,38 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       <div class="finance-section">
         <h3>滞納通知書作成</h3>
         <p style="font-size:14px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
-          長期滞納者（10ヶ月以上）を対象に滞納通知書を自動生成します。<br>
-          個別PDFと全件まとめPDFを「自動作成ドキュメント」フォルダに保存します。
+          長期滞納者（10ヶ月以上・名前設定済み）を対象に通知書を生成します。
         </p>
 
         <!-- 対象者プレビュー -->
         <div style="background:var(--gray-l);border-radius:var(--r);padding:14px;margin-bottom:16px;">
-          <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px;">⚠️ 現在の長期滞納者</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px;">⚠️ 現在の長期滞納者（名前あり）</div>
           <div id="notice-preview"></div>
         </div>
 
-        <button class="submit-btn" id="notice-submit-btn" onclick="submitCreateNotice()" style="background:var(--orange);">
-          ⚠️ 滞納通知書を生成する（個別PDF）
+        <!-- ボタン1：個別生成 -->
+        <button class="submit-btn" id="notice-submit-btn" onclick="submitCreateNotice()" style="background:var(--orange);margin-bottom:10px;">
+          📄 滞納通知書を作成する（個別PDF）
         </button>
 
-        <!-- 生成結果 -->
-        <div id="notice-result" style="display:none;margin-top:16px;padding:14px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);">
-          <div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:8px;">✓ 個別PDFを生成しました</div>
-          <div style="font-size:13px;color:var(--text2);margin-bottom:10px;" id="notice-result-path"></div>
-          <a id="notice-folder-link" href="#" target="_blank" style="display:block;padding:12px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:14px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:10px;">
+        <!-- ボタン2：まとめPDF -->
+        <button class="submit-btn" id="notice-merge-btn" onclick="submitMergedPdf()" style="background:var(--blue2);margin-bottom:10px;">
+          🗂️ 最新ディレクトリから滞納通知書をまとめる
+        </button>
+
+        <!-- ボタン3：古いフォルダ削除 -->
+        <button class="submit-btn" id="notice-clean-btn" onclick="submitCleanNotices()" style="background:var(--gray);margin-bottom:16px;">
+          🗑️ 古い滞納通知書フォルダを削除する（3件を残す）
+        </button>
+
+        <!-- 結果表示 -->
+        <div id="notice-result" style="display:none;margin-top:8px;padding:14px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);">
+          <div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:8px;" id="notice-result-title">✓ 完了しました</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:10px;" id="notice-result-msg"></div>
+          <a id="notice-folder-link" href="#" target="_blank" style="display:none;padding:12px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:14px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:8px;display:block;">
             📁 生成フォルダを開く
           </a>
-          <button id="notice-merge-btn" onclick="submitMergedPdf()" style="width:100%;padding:14px;background:var(--blue2);color:var(--white);border:none;border-radius:var(--r);font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px;">
-            📄 全件まとめPDFを生成する
-          </button>
-          <div id="notice-merge-result" style="display:none;padding:10px;background:var(--blue-l);border:1px solid var(--blue-b);border-radius:8px;font-size:13px;color:var(--blue2);font-weight:600;text-align:center;">
-            ✓ まとめPDFを生成しました
-          </div>
-          <div id="notice-result-list" style="margin-top:12px;font-size:13px;color:var(--text2);"></div>
+          <div id="notice-result-list" style="margin-top:8px;font-size:13px;color:var(--text2);"></div>
         </div>
       </div>
     </div>
@@ -757,6 +770,9 @@ function initMenu() {
 
   // 集金日バナー
   renderCollectionBanner();
+
+  // 滞納通知書一括PDFの存在確認
+  checkMergedPdf();
 }
 
 // ===================================================
@@ -2090,30 +2106,25 @@ async function submitCreateReport() {
 function initNotice() {
   document.getElementById('notice-result').style.display = 'none';
   renderNoticePreview();
-
-  // メニューのバッジも更新
-  const longCount = residents.filter(r => {
-    const u = unpaid[r.room !== undefined ? r.room : r];
-    return u && u.longFlag === 1;
-  }).length;
-  const badge = document.getElementById('menu-badge-notice');
-  if (badge) {
-    badge.innerHTML = longCount > 0
-      ? `<span class="menu-badge red">${longCount}件 長期滞納</span>` : '';
-  }
 }
 
 function renderNoticePreview() {
   const prev = document.getElementById('notice-preview');
-  // 長期滞納者をローカルデータから表示
   const longList = Object.entries(unpaid)
-    .filter(([, u]) => u.longFlag === 1)
+    .filter(([room, u]) => u.longFlag === 1 && (getRoomName(room) || '').trim() !== '')
     .sort(([a], [b]) => Number(a) - Number(b));
 
+  const noticeBadge = document.getElementById('menu-badge-notice');
+
   if (longList.length === 0) {
-    prev.innerHTML = '<div style="font-size:13px;color:var(--text2);">長期滞納者はいません</div>';
+    prev.innerHTML = '<div style="font-size:13px;color:var(--text2);">対象者はいません（名前未設定を除く）</div>';
     document.getElementById('notice-submit-btn').disabled = true;
+    if (noticeBadge) noticeBadge.innerHTML = '';
     return;
+  }
+
+  if (noticeBadge) {
+    noticeBadge.innerHTML = `<span class="menu-badge red">${longList.length}件 長期滞納</span>`;
   }
 
   const fmtYen = n => `¥${Number(n).toLocaleString()}`;
@@ -2135,39 +2146,35 @@ async function submitCreateNotice() {
   if (!navigator.onLine) { showToast('オフライン中は生成できません'); return; }
   const btn = document.getElementById('notice-submit-btn');
   btn.disabled = true;
-  btn.textContent = '生成中... しばらくお待ちください';
-  document.getElementById('notice-result').style.display = 'none';
+  btn.textContent = '作成中... しばらくお待ちください';
+  showNoticeResult(false);
 
   try {
     const result = await gasPost({ action: 'createDelinquencyNotices' });
     if (!result.success) throw new Error(result.error || '生成失敗');
 
     if (result.count === 0) {
-      showToast('長期滞納者がいません');
+      showToast('対象者がいません');
+      btn.disabled = false;
+      btn.textContent = '📄 滞納通知書を作成する（個別PDF）';
       return;
     }
 
-    document.getElementById('notice-result').style.display = 'block';
-    document.getElementById('notice-result-path').textContent =
-      `保存先: ${result.folderPath}（${result.count}件）`;
-    document.getElementById('notice-folder-link').href = result.folderUrl;
-
     const fmtYen = n => `¥${Number(n).toLocaleString()}`;
-    document.getElementById('notice-result-list').innerHTML =
-      '<div style="font-weight:600;margin-bottom:6px;">生成した通知書</div>' +
+    showNoticeResult(true,
+      '✓ 個別PDFを生成しました',
+      `${result.count}件の通知書を生成しました。フォルダを開いて確認してください。`,
+      result.folderUrl,
       result.rooms.map(r =>
-        `<div class="ledger-room-row">
-          <span>${r.room}号室 ${r.name}</span>
-          <span style="color:var(--red);">${r.months}ヶ月 ${fmtYen(r.amount)}</span>
-        </div>`
-      ).join('');
-
+        `<div class="ledger-room-row"><span>${r.room}号室 ${r.name}</span><span style="color:var(--red);">${r.months}ヶ月 ${fmtYen(r.amount)}</span></div>`
+      ).join('')
+    );
     showToast(`✓ ${result.count}件の通知書を生成しました`);
   } catch(e) {
     showToast('生成に失敗しました: ' + e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = '⚠️ 滞納通知書を生成する';
+    btn.textContent = '📄 滞納通知書を作成する（個別PDF）';
   }
 }
 
@@ -2175,23 +2182,78 @@ async function submitMergedPdf() {
   if (!navigator.onLine) { showToast('オフライン中は生成できません'); return; }
   const btn = document.getElementById('notice-merge-btn');
   btn.disabled = true;
-  btn.textContent = '生成中... しばらくお待ちください';
+  btn.textContent = 'まとめ中... しばらくお待ちください';
+
   try {
-    const result = await gasPost({ action: 'createDelinquencyMergedPdf' });
+    const result = await gasPost({ action: 'createMergedPdf' });
     if (!result.success) throw new Error(result.error || '生成失敗');
-    const el = document.getElementById('notice-merge-result');
-    el.style.display = 'block';
-    el.textContent = result.already ? '✓ まとめPDFはすでに生成済みです' : '✓ まとめPDFを生成しました';
-    showToast(result.message || 'まとめPDFを生成しました');
+
+    showNoticeResult(true,
+      '✓ まとめPDFを生成しました',
+      result.message,
+      result.fileUrl,
+      ''
+    );
+    showToast(result.message);
+    // メニューのダウンロードボタンも更新
+    checkMergedPdf();
   } catch(e) {
     showToast('生成に失敗しました: ' + e.message);
+  } finally {
     btn.disabled = false;
-    btn.textContent = '📄 全件まとめPDFを生成する';
+    btn.textContent = '🗂️ 最新ディレクトリから滞納通知書をまとめる';
+  }
+}
+
+async function submitCleanNotices() {
+  if (!navigator.onLine) { showToast('オフライン中は実行できません'); return; }
+  const btn = document.getElementById('notice-clean-btn');
+  btn.disabled = true;
+  btn.textContent = '削除中...';
+
+  try {
+    const result = await gasPost({ action: 'cleanOldNotices' });
+    if (!result.success) throw new Error(result.error || '削除失敗');
+    showToast(result.message);
+  } catch(e) {
+    showToast('削除に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🗑️ 古い滞納通知書フォルダを削除する（3件を残す）';
+  }
+}
+
+function showNoticeResult(show, title='', msg='', folderUrl='', list='') {
+  const el = document.getElementById('notice-result');
+  el.style.display = show ? 'block' : 'none';
+  if (!show) return;
+  document.getElementById('notice-result-title').textContent = title;
+  document.getElementById('notice-result-msg').textContent   = msg;
+  const link = document.getElementById('notice-folder-link');
+  if (folderUrl) { link.href = folderUrl; link.style.display = 'block'; }
+  else           { link.style.display = 'none'; }
+  document.getElementById('notice-result-list').innerHTML = list;
+}
+
+async function checkMergedPdf() {
+  if (!navigator.onLine) return;
+  try {
+    const result = await gasGet({ action: 'getMergedPdfStatus' });
+    const el = document.getElementById('menu-merged-pdf');
+    if (result.exists) {
+      el.style.display = 'block';
+      document.getElementById('menu-merged-pdf-date').textContent = `更新日時: ${result.updated}`;
+      document.getElementById('menu-merged-pdf-link').href = result.url;
+    } else {
+      el.style.display = 'none';
+    }
+  } catch(e) {
+    document.getElementById('menu-merged-pdf').style.display = 'none';
   }
 }
 
 // ===================================================
-function showToast(msg) {
+function showToast(msg) {function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
