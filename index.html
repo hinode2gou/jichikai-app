@@ -761,7 +761,7 @@ function initMenu() {
   }
 
   // 長期滞納バッジ
-  const longCount = Object.values(unpaid).filter(u => u.longFlag === 1).length;
+  const longCount = Object.values(unpaid).filter(u => Number(u.longFlag) === 1).length;
   const noticeBadge = document.getElementById('menu-badge-notice');
   if (noticeBadge) {
     noticeBadge.innerHTML = longCount > 0
@@ -2111,7 +2111,7 @@ function initNotice() {
 function renderNoticePreview() {
   const prev = document.getElementById('notice-preview');
   const longList = Object.entries(unpaid)
-    .filter(([room, u]) => u.longFlag === 1 && (getRoomName(room) || '').trim() !== '')
+    .filter(([room, u]) => Number(u.longFlag) === 1 && (getRoomName(Number(room)) || '').trim() !== '')
     .sort(([a], [b]) => Number(a) - Number(b));
 
   const noticeBadge = document.getElementById('menu-badge-notice');
@@ -2130,7 +2130,7 @@ function renderNoticePreview() {
   const fmtYen = n => `¥${Number(n).toLocaleString()}`;
   let html = '';
   longList.forEach(([room, u]) => {
-    const name   = getRoomName(room);
+    const name   = getRoomName(Number(room));
     const months = Math.max(0, monthCount(u.from, u.to));
     const amount = months * MONTHLY_FEE;
     html += `<div class="ledger-room-row">
