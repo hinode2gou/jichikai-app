@@ -2105,9 +2105,12 @@ async function submitCreateReport() {
 // ===================================================
 function initNotice() {
   document.getElementById('notice-result').style.display = 'none';
-  // unpaidが空の場合はローカルから再読み込み
-  if (Object.keys(unpaid).length === 0) {
-    loadFromLocal().then(() => renderNoticePreview());
+  if (Object.keys(unpaid).length === 0 || residents.length === 0) {
+    document.getElementById('notice-preview').innerHTML =
+      '<div style="font-size:13px;color:var(--text3);">データ読み込み中...</div>';
+    const loader = (navigator.onLine && residents.length === 0)
+      ? loadAll() : loadFromLocal();
+    loader.then(() => renderNoticePreview());
   } else {
     renderNoticePreview();
   }
