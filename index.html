@@ -2105,19 +2105,31 @@ async function submitCreateReport() {
 // ===================================================
 function initNotice() {
   document.getElementById('notice-result').style.display = 'none';
-  renderNoticePreview();
+  // unpaidが空の場合はローカルから再読み込み
+  if (Object.keys(unpaid).length === 0) {
+    loadFromLocal().then(() => renderNoticePreview());
+  } else {
+    renderNoticePreview();
+  }
 }
 
 function renderNoticePreview() {
   const prev = document.getElementById('notice-preview');
+
+  // unpaidとresidentsの両方が揃っているか確認
   const longList = Object.entries(unpaid)
-    .filter(([room, u]) => Number(u.longFlag) === 1 && (getRoomName(Number(room)) || '').trim() !== '')
+    .filter(([room, u]) => Number(u.longFlag) === 1)
     .sort(([a], [b]) => Number(a) - Number(b));
+
+  // 名前があるものだけ対象（GAS側でも同様にフィルタ）
+  const longListWithName = longList.filter(([room]) =>
+    (getRoomName(Number(room)) || '').trim() !== ''
+  );
 
   const noticeBadge = document.getElementById('menu-badge-notice');
 
   if (longList.length === 0) {
-    prev.innerHTML = '<div style="font-size:13px;color:var(--text2);">対象者はいません（名前未設定を除く）</div>';
+    prev.innerHTML = '<div style="font-size:13px;color:var(--text2);">長期滞納者はいません</div>';
     document.getElementById('notice-submit-btn').disabled = true;
     if (noticeBadge) noticeBadge.innerHTML = '';
     return;
@@ -2130,16 +2142,25 @@ function renderNoticePreview() {
   const fmtYen = n => `¥${Number(n).toLocaleString()}`;
   let html = '';
   longList.forEach(([room, u]) => {
-    const name   = getRoomName(Number(room));
+    const name   = getRoomName(Number(room)) || '（名前未設定）';
     const months = Math.max(0, monthCount(u.from, u.to));
     const amount = months * MONTHLY_FEE;
-    html += `<div class="ledger-room-row">
-      <span style="font-weight:600;">${room}号室 ${name}</span>
+    const noName = !getRoomName(Number(room));
+    html += `<div class="ledger-room-row" style="${noName ? 'opacity:0.5;' : ''}">
+      <span style="font-weight:600;">${room}号室 ${name}${noName ? ' ※対象外' : ''}</span>
       <span style="color:var(--red);font-size:12px;">${u.from}〜${u.to}（${months}ヶ月 ${fmtYen(amount)}）</span>
     </div>`;
   });
+
+  if (longListWithName.length === 0) {
+    html += '<div style="font-size:12px;color:var(--orange);margin-top:8px;">※名前が設定されている方がいないため通知書は生成されません</div>';
+    document.getElementById('notice-submit-btn').disabled = true;
+  } else {
+    document.getElementById('notice-submit-btn').disabled = false;
+    html += `<div style="font-size:12px;color:var(--text2);margin-top:6px;">通知書生成対象: ${longListWithName.length}件</div>`;
+  }
+
   prev.innerHTML = html;
-  document.getElementById('notice-submit-btn').disabled = false;
 }
 
 async function submitCreateNotice() {
