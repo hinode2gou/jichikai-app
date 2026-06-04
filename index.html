@@ -355,7 +355,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
               <div class="menu-card-icon">📊</div>
               <div>
                 <div class="menu-card-title">会計報告書作成</div>
-                <div class="menu-card-sub">期ごとの収支をGoogleドキュメントで自動生成（Word出力対応）</div>
+                <div class="menu-card-sub">期ごとの収支をGoogleスプレッドシートで自動生成</div>
               </div>
             </div>
           </div>
@@ -508,10 +508,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
           <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px;">✓ ドキュメントを生成しました</div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="coldoc-result-path"></div>
           <a id="coldoc-doc-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:6px;">
-            📄 Googleドキュメントを開く
+            📊 Googleスプレッドシートを開く
           </a>
           <a id="coldoc-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;">
-            ⬇️ Word(.docx)でダウンロード
+            ⬇️ Excel(.xlsx)でダウンロード
           </a>
         </div>
       </div>
@@ -524,7 +524,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       <div class="finance-section">
         <h3>会計報告書作成</h3>
         <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
-          収支記録をもとに会計報告書をGoogleドキュメントで自動生成します。<br>
+          収支記録をもとに会計報告書をGoogleスプレッドシートで自動生成します。支出明細は収支記録から自動で追加されます。<br>
           生成後は「自動作成ドキュメント」フォルダに保存されます。
         </p>
 
@@ -560,10 +560,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
           <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px;">✓ 会計報告書を生成しました</div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="report-result-path"></div>
           <a id="report-ss-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:6px;">
-            📄 Googleドキュメントを開く
+            📊 Googleスプレッドシートを開く
           </a>
           <a id="report-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;">
-            ⬇️ Word(.docx)でダウンロード
+            ⬇️ Excel(.xlsx)でダウンロード
           </a>
           <!-- 集計サマリー -->
           <div id="report-summary" style="margin-top:12px;font-size:12px;color:var(--text2);"></div>
@@ -2071,7 +2071,7 @@ async function submitCreateReport() {
     document.getElementById('report-result').style.display = 'block';
     document.getElementById('report-result-path').textContent =
       `保存先: ${result.folderPath}/${result.title}`;
-    document.getElementById('report-ss-link').href = result.docUrl;
+    document.getElementById('report-ss-link').href = result.ssUrl;
     document.getElementById('report-export-link').href = result.exportUrl;
     document.getElementById('report-summary').innerHTML = `
       <div style="border-top:1px solid var(--green-b);padding-top:8px;margin-top:4px;">
