@@ -386,10 +386,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
     <div id="screen-collection" style="display:none;">
       <div class="term-bar">
         <button class="term-arrow" id="btn-prev" onclick="changeView(-1)">‹</button>
+        <button class="term-arrow" onclick="prevFloor()">‹</button>
         <div class="term-center">
           <div class="term-name" id="term-name"></div>
           <div class="term-hint" id="term-hint"></div>
+          <span id="floor-indicator">全フロア</span>
         </div>
+        <button class="term-arrow" onclick="nextFloor()">›</button>
         <button class="term-arrow" id="btn-next" onclick="changeView(1)">›</button>
       </div>
       <div class="stats-row">
@@ -2335,6 +2338,25 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+const FLOORS = [null, 1,2,3,4,5,6,7,8,9,10,11]; // null=全フロア
+let floorIdx = 0;
+
+function prevFloor() {
+  if (floorIdx > 0) { floorIdx--; applyFloor(); }
+}
+function nextFloor() {
+  if (floorIdx < FLOORS.length - 1) { floorIdx++; applyFloor(); }
+}
+function applyFloor() {
+  const f = FLOORS[floorIdx];
+  document.getElementById('floor-indicator').textContent = f ? `${f}F` : '全フロア';
+  if (f === null) {
+    goHome(); // フロアグリッド表示
+  } else {
+    openFloor(f); // 直接そのフロアを開く
+  }
 }
 
 // ===================================================
