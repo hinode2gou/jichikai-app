@@ -744,7 +744,7 @@ function initMenu() {
   document.getElementById('menu-term-sub').textContent = `${t.startYM} 〜 ${t.endYM}`;
 
   // 未払いバッジ
-  const unpaidCount = residents.filter(r => !SKIP_ROOMS.includes(r.room) && hasUnpaid(r.room)).length;
+  const unpaidCount = residents.filter(r => !SKIP_ROOMS.includes(r.room) && !isSpecialRoom(r.room) && hasUnpaid(r.room)).length;
   const badge = document.getElementById('menu-badge-unpaid');
   if (unpaidCount > 0) {
     badge.innerHTML = `<span class="menu-badge red">${unpaidCount}件 未払い</span>`;
@@ -907,10 +907,25 @@ function getRoomName(room) {
   const r = residents.find(r => r.room == room);
   return r ? r.name : '';
 }
+function getRoomNote(room) {
+  const r = residents.find(r => r.room == room);
+  return r ? (r.note || '') : '';
+}
+// 特別フラグ：★振込★ or ★その他★ が備考に含まれる
+function isSpecialRoom(room) {
+  const note = getRoomNote(room);
+  return note.includes('★振込★') || note.includes('★その他★');
+}
+function getSpecialLabel(room) {
+  const note = getRoomNote(room);
+  if (note.includes('★振込★')) return '振込';
+  if (note.includes('★その他★')) return 'その他';
+  return '';
+}
 function getRoomsByFloor(f) {
   return residents
     .map(r => r.room)
-    .filter(r => Math.floor(r/100) === f && !SKIP_ROOMS.includes(r));
+    .filter(r => Math.floor(r/100) === f && !SKIP_ROOMS.includes(r) && !isSpecialRoom(r));
 }
 function calcLongFlag(from, to) {
   return monthCount(from, to) >= 10 ? 1 : 0;
@@ -1333,7 +1348,7 @@ function renderTermBar() {
 }
 
 function updateStats() {
-  const rooms = residents.map(r => r.room).filter(r => !SKIP_ROOMS.includes(r));
+  const rooms = residents.map(r => r.room).filter(r => !SKIP_ROOMS.includes(r) && !isSpecialRoom(r));
   const t = viewTerm();
   const paidCount   = rooms.filter(r => !hasUnpaid(r)).length;
   const unpaidCount = rooms.filter(r => hasUnpaid(r)).length;
@@ -1404,10 +1419,38 @@ function renderRoomList(f) {
   const rooms = getRoomsByFloor(f);
   const t     = viewTerm();
   let html    = '';
-  rooms.forEach(r => {
-    const u      = unpaid[r] || {};
-    const isLong = u.longFlag === 1 && hasUnpaid(r);
-    const memo   = memos[r] || '';
+
+  // 特別フラグの部屋も表示するが別扱い（getRoomsByFloorで除外済みなので、特別部屋を別途追加）
+  const allRooms = residents
+    .map(r => r.room)
+    .filter(r => Math.floor(r/100) === f && !SKIP_ROOMS.includes(r));
+
+  allRooms.forEach(r => {
+    const u        = unpaid[r] || {};
+    const isLong   = u.longFlag === 1 && hasUnpaid(r);
+    const memo     = memos[r] || '';
+    const special  = getSpecialLabel(r);
+
+    if (special) {
+      // 特別フラグ部屋：グレーアウト・タップ無効
+      html += `<div class="room-row" style="opacity:0.5;background:var(--gray-l);">
+        <div class="room-info">
+          <div class="room-num">${r}</div>
+          <div class="room-name">${getRoomName(r)}</div>
+        </div>
+        <div class="months-row">`;
+      t.months.forEach((m) => {
+        html += `<div class="mc future" style="cursor:default;">
+          <div class="ml">${m}</div>
+          <div class="mi" style="font-size:10px;">${special}</div>
+        </div>`;
+      });
+      html += `</div>
+        <div class="long-flag" style="background:var(--gray-l);color:var(--gray);border-color:var(--gray-b);">${special}</div>
+      </div>`;
+      return;
+    }
+
     html += `<div class="room-row">
       <div class="room-info" onclick="openModal(${r})" style="cursor:pointer;">
         <div class="room-num">${r}</div>
@@ -1433,7 +1476,7 @@ function renderRoomList(f) {
 function renderUnpaidList() {
   const wrap  = document.getElementById('view-od');
   const t     = viewTerm();
-  const rooms = residents.map(r => r.room).filter(r => !SKIP_ROOMS.includes(r) && hasUnpaid(r));
+  const rooms = residents.map(r => r.room).filter(r => !SKIP_ROOMS.includes(r) && !isSpecialRoom(r) && hasUnpaid(r));
   if (rooms.length === 0) {
     wrap.innerHTML = '<p style="padding:24px 16px;color:var(--text2);font-size:14px;">未払いはありません 🎉</p>';
     return;
@@ -1573,6 +1616,7 @@ function renderResidentList() {
 
   const filtered = residents.filter(r => {
     if (SKIP_ROOMS.includes(r.room)) return false;
+    if (isSpecialRoom(r.room)) return false;
     if (!query) return true;
     return String(r.room).includes(query) || (r.name||'').toLowerCase().includes(query);
   });
