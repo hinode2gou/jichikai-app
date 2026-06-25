@@ -1416,33 +1416,33 @@ function goHome() {
 }
 
 function renderRoomList(f) {
-  const rooms = getRoomsByFloor(f);
-  const t     = viewTerm();
-  let html    = '';
+  const t = viewTerm();
+  let html = '';
 
-  // 特別フラグの部屋も表示するが別扱い（getRoomsByFloorで除外済みなので、特別部屋を別途追加）
+  // 全部屋（欠番・特別フラグ除く通常部屋 + 特別フラグ部屋）を階順で取得
   const allRooms = residents
     .map(r => r.room)
-    .filter(r => Math.floor(r/100) === f && !SKIP_ROOMS.includes(r));
+    .filter(r => Math.floor(r / 100) === f && !SKIP_ROOMS.includes(r))
+    .sort((a, b) => a - b);
 
   allRooms.forEach(r => {
-    const u        = unpaid[r] || {};
-    const isLong   = u.longFlag === 1 && hasUnpaid(r);
-    const memo     = memos[r] || '';
-    const special  = getSpecialLabel(r);
+    const u       = unpaid[r] || {};
+    const isLong  = u.longFlag === 1 && hasUnpaid(r);
+    const memo    = memos[r] || '';
+    const special = getSpecialLabel(r);
 
     if (special) {
-      // 特別フラグ部屋：グレーアウト・タップ無効
-      html += `<div class="room-row" style="opacity:0.5;background:var(--gray-l);">
+      // 特別フラグ部屋：グレーアウト・タップ無効・フラグ表示
+      html += `<div class="room-row" style="opacity:0.55;background:var(--gray-l);">
         <div class="room-info">
           <div class="room-num">${r}</div>
           <div class="room-name">${getRoomName(r)}</div>
         </div>
         <div class="months-row">`;
-      t.months.forEach((m) => {
+      t.months.forEach(m => {
         html += `<div class="mc future" style="cursor:default;">
           <div class="ml">${m}</div>
-          <div class="mi" style="font-size:10px;">${special}</div>
+          <div class="mi" style="font-size:9px;">${special}</div>
         </div>`;
       });
       html += `</div>
@@ -1451,6 +1451,7 @@ function renderRoomList(f) {
       return;
     }
 
+    // 通常部屋
     html += `<div class="room-row">
       <div class="room-info" onclick="openModal(${r})" style="cursor:pointer;">
         <div class="room-num">${r}</div>
@@ -1459,8 +1460,8 @@ function renderRoomList(f) {
       </div>
       <div class="months-row">`;
     t.months.forEach((m, i) => {
-      const st = monthStatus(r, i);
-      const icon = st==='paid' ? '✓' : st==='unpaid' ? '✗' : '–';
+      const st   = monthStatus(r, i);
+      const icon = st === 'paid' ? '✓' : st === 'unpaid' ? '✗' : '–';
       html += `<div class="mc ${st}" onclick="toggleMonth(${r},${i})">
         <div class="ml">${m}</div>
         <div class="mi">${icon}</div>
@@ -1470,6 +1471,7 @@ function renderRoomList(f) {
     if (isLong) html += `<div class="long-flag">長期</div>`;
     html += `</div>`;
   });
+
   document.getElementById('room-view').innerHTML = html || '<p style="padding:16px;color:var(--text2);">部屋なし</p>';
 }
 
@@ -1616,7 +1618,6 @@ function renderResidentList() {
 
   const filtered = residents.filter(r => {
     if (SKIP_ROOMS.includes(r.room)) return false;
-    if (isSpecialRoom(r.room)) return false;
     if (!query) return true;
     return String(r.room).includes(query) || (r.name||'').toLowerCase().includes(query);
   });
@@ -1670,7 +1671,9 @@ async function saveResident(room) {
   if (idx < 0) return;
   residents[idx].name = name;
   residents[idx].note = note;
-  await dbPutAll('residents', [{ room, name, note }]);
+  // IndexedDB・LocalStorage両方を更新
+  await dbPutAll('residents', residents);
+  lsSave();
   if (navigator.onLine) {
     try {
       await gasPost({ action: 'updateResident', room, name, note });
