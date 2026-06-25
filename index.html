@@ -1280,12 +1280,18 @@ async function syncToGAS() {
     longFlag: unpaid[room].longFlag
   }));
   await gasPost({ action:'syncUnpaid', records });
-  // 受領ログもGASに送信
+
+  // 受領ログを10件ずつ分割して送信（URL長制限対策）
   if (pendingLedger.length > 0) {
-    await gasPost({ action:'addReceiptLogs', logs: pendingLedger });
+    const chunkSize = 10;
+    for (let i = 0; i < pendingLedger.length; i += chunkSize) {
+      const chunk = pendingLedger.slice(i, i + chunkSize);
+      await gasPost({ action:'addReceiptLogs', logs: chunk });
+    }
     await dbClear('pending_ledger');
     pendingLedger = [];
   }
+
   await dbClear('unpaid');
   await dbPutAll('unpaid', Object.entries(unpaid).map(([room,v]) => ({ room:Number(room),...v })));
   pendingRooms.clear();
