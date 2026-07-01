@@ -379,6 +379,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             ダウンロード（長期滞納者PDF.pdf）
           </a>
         </div>
+
+        <!-- データ再取得ボタン -->
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-b);">
+          <button onclick="reloadData()" style="width:100%;padding:14px;background:var(--gray-l);color:var(--text2);border:1px solid var(--gray-b);border-radius:var(--r);font-size:14px;font-weight:600;cursor:pointer;">
+            🔄 スプレッドシートからデータを再取得
+          </button>
+        </div>
       </div>
     </div>
 
@@ -386,14 +393,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
     <div id="screen-collection" style="display:none;">
       <div class="term-bar">
         <button class="term-arrow" id="btn-prev" onclick="changeView(-1)">‹</button>
-        <button class="term-arrow" onclick="prevFloor()">‹</button>
         <div class="term-center">
           <div class="term-name" id="term-name"></div>
           <div class="term-hint" id="term-hint"></div>
-          <span id="floor-indicator">全フロア</span>
         </div>
-        <button class="term-arrow" onclick="nextFloor()">›</button>
         <button class="term-arrow" id="btn-next" onclick="changeView(1)">›</button>
+      </div>
+      <div class="term-bar" style="background:var(--gray-l);padding:6px 24px;">
+        <button class="term-arrow" id="btn-floor-prev" onclick="changeFloor(-1)">‹</button>
+        <div class="term-center">
+          <div class="term-name" id="floor-name" style="font-size:13px;color:var(--text2);">全フロア</div>
+        </div>
+        <button class="term-arrow" id="btn-floor-next" onclick="changeFloor(1)">›</button>
       </div>
       <div class="stats-row">
         <div class="stat-card"><div class="stat-label">支払い済み</div><div class="stat-value green" id="s-paid">-</div></div>
@@ -847,13 +858,32 @@ function renderCollectionBanner() {
 // ===================================================
 function initCollection() {
   currentFloor = null;
+  floorIdx = 0;
   document.getElementById('back-btn').textContent = '← メニュー';
-  // loading-viewを非表示、floor-viewを必ず表示
+  updateFloorBar();
   const lv = document.getElementById('loading-view');
   const fv = document.getElementById('floor-view');
   const rv = document.getElementById('room-view');
-  if (lv) lv.style.display = 'none';
   if (rv) rv.style.display = 'none';
+
+  // データが空の場合は再取得
+  if (residents.length === 0 || Object.keys(unpaid).length === 0) {
+    if (lv) lv.style.display = 'flex';
+    if (fv) fv.style.display = 'none';
+    const loader = navigator.onLine ? fetchFromGAS() : loadFromLocal();
+    loader.then(() => {
+      if (lv) lv.style.display = 'none';
+      if (fv) fv.style.display = 'block';
+      renderAll();
+    }).catch(() => {
+      if (lv) lv.style.display = 'none';
+      if (fv) fv.style.display = 'block';
+      renderAll();
+    });
+    return;
+  }
+
+  if (lv) lv.style.display = 'none';
   if (fv) fv.style.display = 'block';
   renderAll();
 }
@@ -1402,6 +1432,8 @@ function renderFloorGrid() {
 
 function openFloor(f) {
   currentFloor = f;
+  floorIdx = FLOORS.indexOf(f);
+  updateFloorBar();
   document.getElementById('back-btn').textContent = `← ${f}F`;
   document.getElementById('header-title').textContent = `${f}F 集金`;
   document.getElementById('floor-view').style.display = 'none';
@@ -1411,6 +1443,8 @@ function openFloor(f) {
 
 function goHome() {
   currentFloor = null;
+  floorIdx = 0;
+  updateFloorBar();
   document.getElementById('back-btn').textContent = '← メニュー';
   document.getElementById('header-title').textContent = '自治会費管理';
   document.getElementById('room-view').style.display  = 'none';
@@ -1535,11 +1569,84 @@ function changeView(d) {
   if (ni < 0 || ni >= TERMS.length) return;
   viewIdx = ni;
   currentFloor = null;
+  floorIdx = 0;
   document.getElementById('back-btn').textContent = '← メニュー';
   document.getElementById('header-title').textContent = '自治会費管理';
   document.getElementById('room-view').style.display  = 'none';
   document.getElementById('floor-view').style.display = 'block';
+  updateFloorBar();
   renderAll();
+}
+
+// ===================================================
+// フロア切り替え
+// ===================================================
+const FLOORS = [null, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+let floorIdx = 0;
+
+function updateFloorBar() {
+  const f = FLOORS[floorIdx];
+  const el = document.getElementById('floor-name');
+  if (el) el.textContent = f ? `${f}F` : '全フロア';
+  const prevBtn = document.getElementById('btn-floor-prev');
+  const nextBtn = document.getElementById('btn-floor-next');
+  if (prevBtn) prevBtn.disabled = floorIdx === 0;
+  if (nextBtn) nextBtn.disabled = floorIdx === FLOORS.length - 1;
+}
+
+function changeFloor(d) {
+  const ni = floorIdx + d;
+  if (ni < 0 || ni >= FLOORS.length) return;
+  floorIdx = ni;
+  const f = FLOORS[floorIdx];
+  updateFloorBar();
+  if (f === null) {
+    currentFloor = null;
+    document.getElementById('back-btn').textContent = '← メニュー';
+    document.getElementById('header-title').textContent = '自治会費管理';
+    document.getElementById('room-view').style.display  = 'none';
+    document.getElementById('floor-view').style.display = 'block';
+    renderFloorGrid();
+  } else {
+    openFloor(f);
+    floorIdx = FLOORS.indexOf(f); // openFloor内でcurrentFloorが変わるので同期
+  }
+}
+
+// ===================================================
+// データ再取得
+// ===================================================
+async function reloadData() {
+  if (pendingRooms.size > 0) {
+    document.getElementById('modal-root').innerHTML = `
+      <div class="overlay" onclick="if(event.target===this)closeModal()">
+        <div class="confirm-modal">
+          <div class="confirm-title">⚠️ 未同期データがあります</div>
+          <div class="confirm-body">
+            ${pendingRooms.size}件の未同期データがあります。<br>
+            再取得すると未同期データが失われる可能性があります。<br><br>
+            先に同期ボタンで同期してください。
+          </div>
+          <div class="confirm-actions">
+            <button class="confirm-btn cancel" onclick="closeModal()">閉じる</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+  if (!navigator.onLine) {
+    showToast('オフライン中は再取得できません');
+    return;
+  }
+  showToast('データを再取得中...');
+  try {
+    await fetchFromGAS();
+    showToast('✓ データを更新しました');
+    initMenu();
+    if (currentScreen === 'collection') renderAll();
+  } catch(e) {
+    showToast('再取得に失敗しました');
+  }
 }
 
 // ===================================================
@@ -2338,25 +2445,6 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2200);
-}
-
-const FLOORS = [null, 1,2,3,4,5,6,7,8,9,10,11]; // null=全フロア
-let floorIdx = 0;
-
-function prevFloor() {
-  if (floorIdx > 0) { floorIdx--; applyFloor(); }
-}
-function nextFloor() {
-  if (floorIdx < FLOORS.length - 1) { floorIdx++; applyFloor(); }
-}
-function applyFloor() {
-  const f = FLOORS[floorIdx];
-  document.getElementById('floor-indicator').textContent = f ? `${f}F` : '全フロア';
-  if (f === null) {
-    goHome(); // フロアグリッド表示
-  } else {
-    openFloor(f); // 直接そのフロアを開く
-  }
 }
 
 // ===================================================
