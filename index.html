@@ -246,6 +246,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 
 .empty-state{padding:40px 20px;text-align:center;color:var(--text2);font-size:14px;}
 
+.invalid-item{border:1px solid var(--gray-b);border-radius:var(--r);padding:12px 14px;margin-bottom:8px;background:var(--gray-l);}
+.invalid-item-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.invalid-item-room{font-size:14px;font-weight:700;color:var(--text);}
+.invalid-item-period{font-size:12px;color:var(--text2);margin-top:2px;}
+.invalid-item-reason{font-size:11px;color:var(--purple);background:var(--purple-l);padding:1px 8px;border-radius:10px;display:inline-block;margin-top:4px;}
+.invalid-item-ongoing{color:var(--orange);font-weight:600;}
+.invalid-item-actions{display:flex;gap:6px;flex-shrink:0;}
+.invalid-action-btn{border:1px solid var(--gray-b);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;background:var(--white);white-space:nowrap;}
+.invalid-action-btn.close{color:var(--blue2);border-color:var(--blue-b);}
+.invalid-action-btn.delete{color:var(--red);border-color:var(--red-b);}
+
 /* ===== 集金日程ドキュメント ===== */
 .coldoc-half-btn{flex:1;padding:10px;border:1px solid var(--gray-b);border-radius:8px;font-size:13px;font-weight:500;background:var(--white);color:var(--text2);cursor:pointer;}
 .coldoc-half-btn.active{background:var(--blue-l);border-color:var(--blue-b);color:var(--blue2);font-weight:700;}
@@ -344,6 +355,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             <div class="menu-card-icon">📝</div>
             <div class="menu-card-title">出金登録</div>
             <div class="menu-card-sub">公共料金・清掃費・雑費</div>
+          </div>
+          <div class="menu-card purple" onclick="showScreen('invalid')">
+            <div class="menu-card-icon">🏠</div>
+            <div class="menu-card-title">無効期間管理</div>
+            <div class="menu-card-sub">入居前・入院等の集金対象外期間</div>
           </div>
           <div class="menu-card blue" onclick="showScreen('coldoc')" style="grid-column:1/-1;">
             <div style="display:flex;align-items:center;gap:12px;">
@@ -630,6 +646,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       </div>
     </div>
 
+      <!-- 無効期間管理 -->
+    <div id="screen-invalid" style="display:none;">
+      <div class="finance-section">
+        <h3>無効期間管理</h3>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
+          入居前・入院等、集金義務が発生しない期間を登録します。登録期間中の月は集金対象外(表示のみ)になり、金額・長期滞納カウントからも除外されます。
+        </p>
+    
+        <button class="submit-btn" onclick="openAddInvalidPeriodModal()" style="margin-bottom:16px;">
+          ＋ 無効期間を新規登録する
+        </button>
+    
+        <div class="ledger-detail-title">現在登録されている無効期間</div>
+        <div id="invalid-period-list"><div class="empty-state">読み込み中...</div></div>
+      </div>
+    </div>
+
   </div><!-- /screen-container -->
 </div><!-- /main-app -->
 
@@ -688,7 +721,7 @@ let currentTab    = 'col';
 
 function showScreen(name, pushStack = true) {
   // 全画面非表示
-  ['menu','collection','residents','ledger','expense','coldoc','report','notice'].forEach(s => {
+  ['menu','collection','residents','ledger','expense','coldoc','report','notice','invalid'].forEach(s => {
     document.getElementById('screen-' + s).style.display = 'none';
   });
   document.getElementById('screen-' + name).style.display = 'block';
@@ -713,6 +746,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'coldoc')     initColDoc();
   if (name === 'report')     initReport();
   if (name === 'notice')     initNotice();
+  if (name === 'invalid')    initInvalidPeriods();
 }
 
 function handleBack() {
@@ -734,6 +768,7 @@ function updateHeader(name) {
     coldoc:     '集金日程ドキュメント作成',
     report:     '会計報告書作成',
     notice:     '滞納通知書作成',
+    invalid:    '無効期間管理',
   };
   document.getElementById('header-title').textContent = titles[name] || '';
 
@@ -2496,6 +2531,197 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ===================================================
+// 無効期間管理
+// ===================================================
+
+// GASから最新の無効期間を再取得し、グローバル変数・キャッシュを更新
+async function refreshInvalidPeriods() {
+  const data = await gasGet({ action: 'getInvalidPeriods' });
+  invalidPeriods = data.records || [];
+  lsSave();
+  await dbClear('invalid_periods');
+  await dbPutAll('invalid_periods', invalidPeriods);
+}
+
+function initInvalidPeriods() {
+  renderInvalidPeriodsList();
+}
+
+function renderInvalidPeriodsList() {
+  const list = document.getElementById('invalid-period-list');
+  if (!list) return;
+
+  if (invalidPeriods.length === 0) {
+    list.innerHTML = '<div class="empty-state">登録されている無効期間はありません</div>';
+    return;
+  }
+
+  const sorted = [...invalidPeriods].sort((a, b) => Number(a.room) - Number(b.room));
+  let html = '';
+  sorted.forEach(r => {
+    const name = getRoomName(Number(r.room)) || '（名前未設定）';
+    const isOngoing = !r.to;
+    const periodText = isOngoing
+      ? `${r.from} 〜 <span class="invalid-item-ongoing">継続中</span>`
+      : `${r.from} 〜 ${r.to}`;
+    html += `<div class="invalid-item">
+      <div class="invalid-item-top">
+        <div>
+          <div class="invalid-item-room">${r.room}号室 ${name}</div>
+          <div class="invalid-item-period">${periodText}</div>
+          ${r.reason ? `<div class="invalid-item-reason">${r.reason}</div>` : ''}
+        </div>
+        <div class="invalid-item-actions">
+          ${isOngoing ? `<button class="invalid-action-btn close" onclick="openCloseInvalidPeriodModal(${r.room}, '${r.from}')">終了</button>` : ''}
+          <button class="invalid-action-btn delete" onclick="confirmDeleteInvalidPeriod(${r.room}, '${r.from}')">削除</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  list.innerHTML = html;
+}
+
+// ---- 新規追加モーダル ----
+function openAddInvalidPeriodModal() {
+  const roomOptions = residents
+    .filter(r => !SKIP_ROOMS.includes(r.room))
+    .map(r => `<option value="${r.room}">${r.room}号室 ${r.name || '(未設定)'}</option>`)
+    .join('');
+
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <div class="modal-title">無効期間を登録</div>
+        <div class="modal-sub">集金義務が発生しない期間を登録します</div>
+
+        <div class="form-group">
+          <label class="form-label">部屋番号</label>
+          <select class="form-select" id="inv-room">${roomOptions}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">理由</label>
+          <select class="form-select" id="inv-reason">
+            <option value="入居前">入居前</option>
+            <option value="入院">入院</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">開始年月</label>
+          <input type="month" class="form-input" id="inv-from">
+        </div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text2);">
+            <input type="checkbox" id="inv-ongoing" checked onchange="toggleInvToInput()">
+            終了年月は未定（継続中）
+          </label>
+        </div>
+        <div class="form-group" id="inv-to-group" style="display:none;">
+          <label class="form-label">終了年月</label>
+          <input type="month" class="form-input" id="inv-to">
+        </div>
+
+        <button class="submit-btn" onclick="submitAddInvalidPeriod()" style="margin-bottom:8px;">登録する</button>
+        <button class="modal-close" onclick="closeModal()">キャンセル</button>
+      </div>
+    </div>`;
+}
+
+function toggleInvToInput() {
+  const ongoing = document.getElementById('inv-ongoing').checked;
+  document.getElementById('inv-to-group').style.display = ongoing ? 'none' : 'block';
+}
+
+async function submitAddInvalidPeriod() {
+  if (!navigator.onLine) { showToast('オフライン中は登録できません'); return; }
+  const room    = Number(document.getElementById('inv-room').value);
+  const reason  = document.getElementById('inv-reason').value;
+  const fromRaw = document.getElementById('inv-from').value; // "2026-04"
+  const ongoing = document.getElementById('inv-ongoing').checked;
+  const toRaw   = ongoing ? '' : document.getElementById('inv-to').value;
+
+  if (!fromRaw) { showToast('開始年月を入力してください'); return; }
+  if (!ongoing && !toRaw) { showToast('終了年月を入力してください'); return; }
+
+  const from = fromRaw.replace('-', '/');
+  const to   = toRaw ? toRaw.replace('-', '/') : '';
+
+  try {
+    await gasPost({ action: 'addInvalidPeriod', room, from, to, reason });
+    await refreshInvalidPeriods();
+    showToast('✓ 無効期間を登録しました');
+    closeModal();
+    renderInvalidPeriodsList();
+  } catch(e) {
+    showToast('登録に失敗しました: ' + e.message);
+  }
+}
+
+// ---- 終了確定モーダル ----
+function openCloseInvalidPeriodModal(room, from) {
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <div class="modal-title">${room}号室の無効期間を終了</div>
+        <div class="modal-sub">開始: ${from} 〜 継続中</div>
+        <div class="form-group">
+          <label class="form-label">終了年月</label>
+          <input type="month" class="form-input" id="inv-close-to">
+        </div>
+        <button class="submit-btn" onclick="submitCloseInvalidPeriod(${room}, '${from}')" style="margin-bottom:8px;">確定する</button>
+        <button class="modal-close" onclick="closeModal()">キャンセル</button>
+      </div>
+    </div>`;
+}
+
+async function submitCloseInvalidPeriod(room, from) {
+  if (!navigator.onLine) { showToast('オフライン中は操作できません'); return; }
+  const toRaw = document.getElementById('inv-close-to').value;
+  if (!toRaw) { showToast('終了年月を入力してください'); return; }
+  const to = toRaw.replace('-', '/');
+
+  try {
+    const result = await gasPost({ action: 'closeInvalidPeriod', room, from, to });
+    if (!result.success) throw new Error(result.error || '更新失敗');
+    await refreshInvalidPeriods();
+    showToast('✓ 終了年月を確定しました');
+    closeModal();
+    renderInvalidPeriodsList();
+  } catch(e) {
+    showToast('更新に失敗しました: ' + e.message);
+  }
+}
+
+// ---- 削除 ----
+function confirmDeleteInvalidPeriod(room, from) {
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay">
+      <div class="confirm-modal">
+        <div class="confirm-title">無効期間を削除しますか？</div>
+        <div class="confirm-body">${room}号室・開始 ${from} の無効期間を削除します。<br>この操作は取り消せません。</div>
+        <div class="confirm-actions">
+          <button class="confirm-btn cancel" onclick="closeModal()">キャンセル</button>
+          <button class="confirm-btn danger" onclick="doDeleteInvalidPeriod(${room}, '${from}')">削除する</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function doDeleteInvalidPeriod(room, from) {
+  if (!navigator.onLine) { showToast('オフライン中は操作できません'); return; }
+  try {
+    const result = await gasPost({ action: 'deleteInvalidPeriod', room, from });
+    if (!result.success) throw new Error(result.error || '削除失敗');
+    await refreshInvalidPeriods();
+    showToast('✓ 削除しました');
+    closeModal();
+    renderInvalidPeriodsList();
+  } catch(e) {
+    showToast('削除に失敗しました: ' + e.message);
+  }
 }
 
 // ===================================================
