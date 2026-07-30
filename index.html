@@ -132,6 +132,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .mc.paid{background:var(--green-l);border-color:var(--green-b);}
 .mc.unpaid{background:var(--red-l);border-color:var(--red-b);}
 .mc.future{background:var(--gray-l);border-color:var(--gray-b);opacity:0.5;}
+.mc.invalid{background:var(--gray-l);border-color:var(--gray-b);opacity:0.35;cursor:default;}
+.mc.invalid .ml,.mc.invalid .mi{color:var(--text3);}
 .mc .ml{font-size:13px;color:var(--text2);}
 .mc.paid .ml,.mc.paid .mi{color:var(--green);}
 .mc.unpaid .ml,.mc.unpaid .mi{color:var(--red);}
@@ -210,6 +212,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .modal-mc.paid{background:var(--green-l);border-color:var(--green-b);}
 .modal-mc.unpaid{background:var(--red-l);border-color:var(--red-b);}
 .modal-mc.future{background:var(--gray-l);border-color:var(--gray-b);opacity:0.5;}
+.modal-mc.invalid{background:var(--gray-l);border-color:var(--gray-b);opacity:0.35;cursor:default;}
+.modal-mc.invalid .ml,.modal-mc.invalid .mi{color:var(--text3);}
 .modal.mc .ml{font-size:13px;color:var(--text2);}
 .modal-mc.paid .ml,.modal-mc.paid .mi{color:var(--green);}
 .modal-mc.unpaid .ml,.modal-mc.unpaid .mi{color:var(--red);}
@@ -672,6 +676,7 @@ let memos       = {}; // { room: 'メモ文字列' }
 let pendingRooms = new Set();
 let financeHistory = [];
 let pendingLedger = []; // 未反映の受領ログ
+let invalidPeriods = [];
 
 // ===================================================
 // 画面管理
@@ -921,6 +926,8 @@ function hasUnpaid(room) {
 function monthStatus(room, monthIdx) {
   const t   = viewTerm();
   const ym  = termMonthYM(t, monthIdx);
+  const invalidSet = getInvalidMonthSet(room);
+  if (invalidSet.has(ym)) return 'invalid';
   const u   = unpaid[room];
   if (!u) return 'future';
   const ymN   = ymToNum(ym);
@@ -960,8 +967,37 @@ function getRoomsByFloor(f) {
     .map(r => r.room)
     .filter(r => Math.floor(r/100) === f && !SKIP_ROOMS.includes(r) && !isSpecialRoom(r));
 }
-function calcLongFlag(from, to) {
-  return monthCount(from, to) >= 10 ? 1 : 0;
+function calcLongFlag(room, from, to) {
+  const invalidSet = getInvalidMonthSet(room);
+  return effectiveMonthCount(from, to, invalidSet) >= 10 ? 1 : 0;
+}
+// 指定部屋の無効月を YYYY/MM の Set にして返す（Toが空欄なら現在年月まで延長）
+function getInvalidMonthSet(room) {
+  const now = new Date();
+  const nowYm = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
+  const set = new Set();
+  invalidPeriods
+    .filter(r => String(r.room) === String(room))
+    .forEach(r => {
+      const to = r.to || nowYm;
+      let cur = r.from;
+      while (ymToNum(cur) <= ymToNum(to)) {
+        set.add(cur);
+        cur = addMonths(cur, 1);
+      }
+    });
+  return set;
+}
+
+// from〜to の月数のうち、無効月を除外してカウント
+function effectiveMonthCount(from, to, invalidSet) {
+  let count = 0;
+  let cur = from;
+  while (ymToNum(cur) <= ymToNum(to)) {
+    if (!invalidSet.has(cur)) count++;
+    cur = addMonths(cur, 1);
+  }
+  return count;
 }
 
 // ===================================================
@@ -976,24 +1012,26 @@ function receiveMonth(room, monthIdx) {
   const fromN = ymToNum(u.from);
   if (ymN < fromN) return;
 
+  const invalidSet = getInvalidMonthSet(room);
+
   const newFrom = addMonths(ym, 1);
   const newTo = ymToNum(u.to) >= ymN ? u.to : ym;
-  unpaid[room] = { from: newFrom, to: newTo, longFlag: calcLongFlag(newFrom, newTo) };
+  unpaid[room] = { from: newFrom, to: newTo, longFlag: calcLongFlag(room, newFrom, newTo) };
   pendingRooms.add(room);
 
-  // 受領ログ追加
   const today = new Date();
   const todayYM = `${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,'0')}`;
-  // from〜ymの全月をログ
   let cur = u.from;
   while (ymToNum(cur) <= ymN) {
-    pendingLedger.push({
-      room,
-      ym: cur,
-      type: ymToNum(cur) < ymToNum(todayYM) ? '滞納分' : '当期分',
-      amount: MONTHLY_FEE,
-      receivedAt: today.toISOString().slice(0,10)
-    });
+    if (!invalidSet.has(cur)) {
+      pendingLedger.push({
+        room,
+        ym: cur,
+        type: ymToNum(cur) < ymToNum(todayYM) ? '滞納分' : '当期分',
+        amount: MONTHLY_FEE,
+        receivedAt: today.toISOString().slice(0,10)
+      });
+    }
     cur = addMonths(cur, 1);
   }
 
@@ -1010,7 +1048,7 @@ function unreceiveMonth(room, monthIdx) {
   if (!u) return;
   const ymN = ymToNum(ym);
   if (ymN >= ymToNum(u.from)) return;
-  unpaid[room] = { from: ym, to: u.to, longFlag: calcLongFlag(ym, u.to) };
+  unpaid[room] = { from: ym, to: u.to, longFlag: calcLongFlag(room, ym, u.to) };
   pendingRooms.add(room);
   // ログから取り消し
   pendingLedger = pendingLedger.filter(l => !(l.room == room && ymToNum(l.ym) >= ymN));
@@ -1022,6 +1060,7 @@ function unreceiveMonth(room, monthIdx) {
 
 function toggleMonth(room, monthIdx) {
   const status = monthStatus(room, monthIdx);
+  if (status === 'invalid') return;
   if (status === 'unpaid' || status === 'future') receiveMonth(room, monthIdx);
   else if (status === 'paid') unreceiveMonth(room, monthIdx);
 }
@@ -1061,7 +1100,7 @@ async function doSwitchTerm(newTermEnd) {
       const u = unpaid[room];
       if (monthCount(u.from, u.to) < 1) unpaid[room].from = nextStart;
       unpaid[room].to = newTermEnd;
-      unpaid[room].longFlag = calcLongFlag(unpaid[room].from, newTermEnd);
+      unpaid[room].longFlag = calcLongFlag(room, unpaid[room].from, newTermEnd);
       pendingRooms.add(Number(room));
     });
     if (navigator.onLine) {
@@ -1080,16 +1119,16 @@ async function doSwitchTerm(newTermEnd) {
 // IndexedDB
 // ===================================================
 let db = null;
-const DB_NAME = 'jichikai_v3', DB_VER = 1;
+const DB_NAME = 'jichikai_v3', DB_VER = 2;
 
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VER);
     req.onupgradeneeded = e => {
       const d = e.target.result;
-      ['residents','unpaid','memos','pending_ledger'].forEach(name => {
+      ['residents','unpaid','memos','pending_ledger','invalid_periods'].forEach(name => {
         if (!d.objectStoreNames.contains(name)) {
-          if (name === 'pending_ledger') {
+          if (name === 'pending_ledger' || name === 'invalid_periods') {
             d.createObjectStore(name, { autoIncrement: true, keyPath: 'id' });
           } else {
             d.createObjectStore(name, { keyPath: 'room' });
@@ -1101,6 +1140,7 @@ function openDB() {
     req.onerror = () => reject(req.error);
   });
 }
+
 function dbGetAll(store) {
   return new Promise((res,rej) => {
     const req = db.transaction(store,'readonly').objectStore(store).getAll();
@@ -1189,6 +1229,7 @@ async function gasPost(data) {
 // ===================================================
 const LS_KEY_RESIDENTS = 'jk_residents';
 const LS_KEY_UNPAID    = 'jk_unpaid';
+const LS_KEY_INVALID   = 'jk_invalid';
 const LS_KEY_TS        = 'jk_cache_ts';
 const CACHE_TTL_MS     = 10 * 60 * 1000; // 10分
 
@@ -1196,6 +1237,7 @@ function lsSave() {
   try {
     localStorage.setItem(LS_KEY_RESIDENTS, JSON.stringify(residents));
     localStorage.setItem(LS_KEY_UNPAID,    JSON.stringify(unpaid));
+    localStorage.setItem(LS_KEY_INVALID,   JSON.stringify(invalidPeriods));
     localStorage.setItem(LS_KEY_TS,        String(Date.now()));
   } catch(e) { /* quota超えなど無視 */ }
 }
@@ -1204,9 +1246,11 @@ function lsLoad() {
   try {
     const r = localStorage.getItem(LS_KEY_RESIDENTS);
     const u = localStorage.getItem(LS_KEY_UNPAID);
+    const iv = localStorage.getItem(LS_KEY_INVALID);
     if (!r || !u) return false;
     residents = JSON.parse(r);
     unpaid    = JSON.parse(u);
+    invalidPeriods = iv ? JSON.parse(iv) : [];
     return true;
   } catch(e) { return false; }
 }
@@ -1244,20 +1288,25 @@ async function loadAll() {
 }
 
 async function fetchFromGAS() {
-  const [resData, unpaidData] = await Promise.all([
+  const [resData, unpaidData, invalidData] = await Promise.all([
     gasGet({ action:'getResidents' }),
-    gasGet({ action:'getUnpaidList' })
+    gasGet({ action:'getUnpaidList' }),
+    gasGet({ action:'getInvalidPeriods' })
   ]);
   residents = resData.residents || [];
   unpaid = {};
   (unpaidData.records || []).forEach(r => {
     unpaid[r.room] = { from: r.from, to: r.to, longFlag: r.longFlag };
   });
+  invalidPeriods = invalidData.records || [];
+
   lsSave();
   await dbClear('residents');
   await dbClear('unpaid');
+  await dbClear('invalid_periods');
   await dbPutAll('residents', residents);
   await dbPutAll('unpaid', Object.entries(unpaid).map(([room,v]) => ({ room:Number(room),...v })));
+  await dbPutAll('invalid_periods', invalidPeriods);
   pendingRooms.clear();
   updateSyncBtn();
 }
@@ -1273,14 +1322,13 @@ async function refreshFromGASBackground() {
 
 async function loadFromLocal() {
   try {
-    // まずLocalStorageを試みる
     const hasCached = lsLoad();
     if (!hasCached) {
-      // IndexedDBにフォールバック
       residents = await dbGetAll('residents');
       const ul = await dbGetAll('unpaid');
       unpaid = {};
       ul.forEach(r => { unpaid[r.room] = { from:r.from, to:r.to, longFlag:r.longFlag }; });
+      invalidPeriods = await dbGetAll('invalid_periods');
     }
     const ml = await dbGetAll('memos');
     memos = {};
@@ -1498,7 +1546,7 @@ function renderRoomList(f) {
       <div class="months-row">`;
     t.months.forEach((m, i) => {
       const st   = monthStatus(r, i);
-      const icon = st === 'paid' ? '✓' : st === 'unpaid' ? '✗' : '–';
+      const icon = st === 'paid' ? '✓' : st === 'unpaid' ? '✗' : st === 'invalid' ? '／' : '–';
       html += `<div class="mc ${st}" onclick="toggleMonth(${r},${i})">
         <div class="ml">${m}</div>
         <div class="mi">${icon}</div>
@@ -1533,7 +1581,8 @@ function renderUnpaidList() {
     const mc    = unpaidMonths.length;
     const amt   = mc * MONTHLY_FEE;
     const isLong = u.longFlag === 1;
-    const totalMc = Math.max(0, monthCount(u.from, u.to));
+    const invalidSetItem = getInvalidMonthSet(r);
+    const totalMc = Math.max(0, effectiveMonthCount(u.from, u.to, invalidSetItem));
     const memo = memos[r] || '';
     html += `<div class="unpaid-item ${isLong?'long':''}" onclick="openModal(${r})">
       <div style="flex:1;">
@@ -1655,21 +1704,22 @@ async function reloadData() {
 function openModal(room) {
   const t    = viewTerm();
   const u    = unpaid[room] || {};
-  const mc   = hasUnpaid(room) ? Math.max(0, monthCount(u.from, u.to)) : 0;
+  const invalidSetModal = getInvalidMonthSet(room);
+  const mc   = hasUnpaid(room) ? Math.max(0, effectiveMonthCount(u.from, u.to, invalidSetModal)) : 0;
   const amt  = mc * MONTHLY_FEE;
   const memo = memos[room] || '';
 
   let monthsHtml = '<div class="modal-months">';
   t.months.forEach((m,i) => {
     const st = monthStatus(room, i);
-    const icon = st==='paid' ? '✓' : st==='unpaid' ? '✗' : '–';
+    const icon = st==='paid' ? '✓' : st==='unpaid' ? '✗' : st==='invalid' ? '／' : '–';
     monthsHtml += `<div class="modal-mc ${st}" onclick="toggleMonth(${room},${i});refreshModal(${room})">
       <div class="ml">${m}</div><div class="mi">${icon}</div>
     </div>`;
   });
   monthsHtml += '</div>';
 
-  const totalMc = Math.max(0, monthCount(u.from, u.to));
+  const totalMc = Math.max(0, effectiveMonthCount(u.from, u.to, invalidSetModal));
   const infoHtml = `<div class="modal-info">
     累計未払い期間: <b>${hasUnpaid(room) ? u.from + ' 〜 ' + u.to : 'なし'}</b><br>
     累計未払い月数: <b>${totalMc}ヶ月</b>　今期未払い: <b>${mc}ヶ月 / ¥${amt.toLocaleString()}</b>
@@ -2309,7 +2359,8 @@ function renderNoticePreview() {
   let html = '';
   longList.forEach(([room, u]) => {
     const name   = getRoomName(Number(room)) || '（名前未設定）';
-    const months = Math.max(0, monthCount(u.from, u.to));
+    const invalidSetNotice = getInvalidMonthSet(Number(room));
+    const months = Math.max(0, effectiveMonthCount(u.from, u.to, invalidSetNotice));
     const amount = months * MONTHLY_FEE;
     const noName = !getRoomName(Number(room));
     html += `<div class="ledger-room-row" style="${noName ? 'opacity:0.5;' : ''}">
