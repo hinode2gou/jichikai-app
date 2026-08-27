@@ -351,6 +351,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             <div class="menu-card-sub">集金分を収支に反映</div>
             <div id="menu-badge-ledger"></div>
           </div>
+          <div class="menu-card purple" onclick="showScreen('routine')">
+            <div class="menu-card-icon">🔌</div>
+            <div class="menu-card-title">定例出金登録</div>
+            <div class="menu-card-sub">電気・水道・ガス・清掃費をまとめて登録</div>
+          </div>
           <div class="menu-card orange" onclick="showScreen('expense')">
             <div class="menu-card-icon">📝</div>
             <div class="menu-card-title">出金登録</div>
@@ -470,6 +475,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 
     <!-- 出金登録 -->
     <div id="screen-expense" style="display:none;">
+
+      <!-- 定例出金登録 -->
+      <div id="screen-routine" style="display:none;">
+        <div class="term-bar">
+          <button class="term-arrow" onclick="changeRoutineMonth(-1)">‹</button>
+          <div class="term-center">
+            <div class="term-name" id="routine-month-label">-</div>
+          </div>
+          <button class="term-arrow" onclick="changeRoutineMonth(1)">›</button>
+        </div>
+        <div class="finance-section">
+          <div id="routine-form"><div class="empty-state">読み込み中...</div></div>
+          <button class="submit-btn" id="routine-submit-btn" onclick="submitRoutineExpenses()">この月の内容を登録する</button>
+        </div>
+      </div>
+      
       <div class="finance-section">
         <h3>出金を登録する</h3>
         <div class="form-group">
@@ -504,9 +525,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
           <div class="ledger-detail-title" style="margin-bottom:10px;">今期の出金履歴</div>
           <div id="expense-history-list"><div class="empty-state">履歴を読み込み中...</div></div>
         </div>
+
+        <div class="term-bar" style="padding:6px 0;background:var(--gray-l);margin:0 -14px 14px;">
+          <button class="term-arrow" onclick="changeExpenseMonth(-1)">‹</button>
+          <div class="term-center"><div class="term-name" id="expense-month-label" style="font-size:14px;">-</div></div>
+          <button class="term-arrow" onclick="changeExpenseMonth(1)">›</button>
+        </div>
+      
       </div>
     </div>
 
+  
+        
     <!-- 集金日程ドキュメント作成 -->
     <div id="screen-coldoc" style="display:none;">
       <div class="finance-section">
@@ -721,7 +751,7 @@ let currentTab    = 'col';
 
 function showScreen(name, pushStack = true) {
   // 全画面非表示
-  ['menu','collection','residents','ledger','expense','coldoc','report','notice','invalid'].forEach(s => {
+  ['menu','collection','residents','ledger','expense','coldoc','report','notice','invalid','routine'].forEach(s => {
     document.getElementById('screen-' + s).style.display = 'none';
   });
   document.getElementById('screen-' + name).style.display = 'block';
@@ -747,6 +777,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'report')     initReport();
   if (name === 'notice')     initNotice();
   if (name === 'invalid')    initInvalidPeriods();
+  if (name === 'routine')    initRoutineExpense();
 }
 
 function handleBack() {
@@ -769,6 +800,7 @@ function updateHeader(name) {
     report:     '会計報告書作成',
     notice:     '滞納通知書作成',
     invalid:    '無効期間管理',
+    routine:    '定例出金登録',
   };
   document.getElementById('header-title').textContent = titles[name] || '';
 
@@ -2003,12 +2035,36 @@ const QUICK_ITEMS = {
   'その他':   []
 };
 
+let expenseYear, expenseMonth;
+
 function initExpense() {
-  // 今日の日付をデフォルト設定
-  const today = new Date().toISOString().slice(0,10);
-  document.getElementById('exp-date').value = today;
+  const today = new Date();
+  document.getElementById('exp-date').value = today.toISOString().slice(0,10);
+  if (!expenseYear) { expenseYear = today.getFullYear(); expenseMonth = today.getMonth() + 1; }
+  renderExpenseMonthLabel();
   renderQuickItems();
   loadExpenseHistory();
+}
+
+function renderExpenseMonthLabel() {
+  document.getElementById('expense-month-label').textContent = `${expenseYear}年${expenseMonth}月`;
+}
+
+function changeExpenseMonth(delta) {
+  expenseMonth += delta;
+  if (expenseMonth > 12) { expenseMonth = 1; expenseYear++; }
+  if (expenseMonth < 1)  { expenseMonth = 12; expenseYear--; }
+  renderExpenseMonthLabel();
+  loadExpenseHistory();
+}
+
+function monthToTerm(year, month) {
+  if (month >= 4) return { year, half: month <= 9 ? '前期' : '後期' };
+  return { year: year - 1, half: '後期' };
+}
+
+function escapeAttr(s) {
+  return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 function renderQuickItems() {
@@ -2064,21 +2120,22 @@ async function submitExpense() {
 }
 
 async function loadExpenseHistory() {
-  const t = TERMS[CURRENT_IDX];
   const listEl = document.getElementById('expense-history-list');
   if (!navigator.onLine) {
     listEl.innerHTML = '<div class="empty-state">オフライン中は履歴を表示できません</div>';
     return;
   }
+  const t = monthToTerm(expenseYear, expenseMonth);
+  const targetYm = `${expenseYear}/${String(expenseMonth).padStart(2,'0')}`;
   try {
     const data = await gasGet({ action:'getFinance', year: t.year, half: t.half });
-    const records = (data.records || []).filter(r => r.type === '支出');
+    const records = (data.records || []).filter(r => r.type === '支出' && r.date && r.date.slice(0,7) === targetYm);
     if (records.length === 0) {
-      listEl.innerHTML = '<div class="empty-state">今期の出金記録はありません</div>';
+      listEl.innerHTML = '<div class="empty-state">この月の出金記録はありません</div>';
       return;
     }
     listEl.innerHTML = records.reverse().map(r => `
-      <div class="finance-history-item">
+      <div class="finance-history-item" onclick="openEditExpenseModal(${r.rowIndex},'${escapeAttr(r.item)}',${r.amount},'${escapeAttr(r.note)}')" style="cursor:pointer;">
         <div class="fh-left">
           <div class="fh-date">${r.date}</div>
           <div class="fh-item">${r.item}<span class="fh-type expense">支出</span></div>
@@ -2091,6 +2148,160 @@ async function loadExpenseHistory() {
   }
 }
 
+function openEditExpenseModal(rowIndex, item, amount, note) {
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <div class="modal-title">出金記録を編集</div>
+        <div class="form-group">
+          <label class="form-label">項目</label>
+          <input type="text" class="form-input" id="edit-exp-item" value="${item}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">金額（円）</label>
+          <input type="number" class="form-input" id="edit-exp-amount" value="${amount}" inputmode="numeric">
+        </div>
+        <div class="form-group">
+          <label class="form-label">備考</label>
+          <input type="text" class="form-input" id="edit-exp-note" value="${note}">
+        </div>
+        <button class="submit-btn" onclick="saveEditExpense(${rowIndex})" style="margin-bottom:8px;">保存する</button>
+        <button class="invalid-action-btn delete" style="width:100%;padding:11px;margin-bottom:8px;" onclick="confirmDeleteExpense(${rowIndex})">削除する</button>
+        <button class="modal-close" onclick="closeModal()">キャンセル</button>
+      </div>
+    </div>`;
+}
+
+async function saveEditExpense(rowIndex) {
+  if (!navigator.onLine) { showToast('オフライン中は保存できません'); return; }
+  const item   = document.getElementById('edit-exp-item').value.trim();
+  const amount = Number(document.getElementById('edit-exp-amount').value);
+  const note   = document.getElementById('edit-exp-note').value.trim();
+  if (!item || !amount || amount <= 0) { showToast('項目・金額を確認してください'); return; }
+  try {
+    await gasPost({ action: 'updateFinanceRecord', rowIndex, item, amount, note });
+    showToast('✓ 更新しました');
+    closeModal();
+    loadExpenseHistory();
+  } catch(e) {
+    showToast('更新に失敗しました: ' + e.message);
+  }
+}
+
+function confirmDeleteExpense(rowIndex) {
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay">
+      <div class="confirm-modal">
+        <div class="confirm-title">この出金記録を削除しますか？</div>
+        <div class="confirm-body">この操作は取り消せません。</div>
+        <div class="confirm-actions">
+          <button class="confirm-btn cancel" onclick="closeModal()">キャンセル</button>
+          <button class="confirm-btn danger" onclick="doDeleteExpense(${rowIndex})">削除する</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function doDeleteExpense(rowIndex) {
+  if (!navigator.onLine) { showToast('オフライン中は削除できません'); return; }
+  try {
+    await gasPost({ action: 'deleteFinanceRecord', rowIndex });
+    showToast('✓ 削除しました');
+    closeModal();
+    loadExpenseHistory();
+  } catch(e) {
+    showToast('削除に失敗しました: ' + e.message);
+  }
+}
+
+const ROUTINE_ITEMS = [
+  { type: '公共料金', item: '電気料金' },
+  { type: '公共料金', item: '集会所 電気料金' },
+  { type: '公共料金', item: '水道代' },
+  { type: '公共料金', item: '集会所 水道代' },
+  { type: '公共料金', item: 'ガス代' },
+  { type: '清掃費',   item: '清掃費' },
+  { type: '清掃費',   item: 'ゴミ分別担当費' },
+];
+function routineFullItem(ri) { return `[${ri.type}] ${ri.item}`; }
+
+let routineYear, routineMonth;
+
+function initRoutineExpense() {
+  const now = new Date();
+  if (!routineYear) { routineYear = now.getFullYear(); routineMonth = now.getMonth() + 1; }
+  renderRoutineMonthLabel();
+  loadRoutineExpenses();
+}
+
+function renderRoutineMonthLabel() {
+  document.getElementById('routine-month-label').textContent = `${routineYear}年${routineMonth}月`;
+}
+
+function changeRoutineMonth(delta) {
+  routineMonth += delta;
+  if (routineMonth > 12) { routineMonth = 1; routineYear++; }
+  if (routineMonth < 1)  { routineMonth = 12; routineYear--; }
+  renderRoutineMonthLabel();
+  loadRoutineExpenses();
+}
+
+async function loadRoutineExpenses() {
+  const form = document.getElementById('routine-form');
+  form.innerHTML = '<div class="empty-state">読み込み中...</div>';
+  if (!navigator.onLine) {
+    form.innerHTML = '<div class="empty-state">オフライン中は確認できません</div>';
+    return;
+  }
+  try {
+    const data = await gasGet({ action: 'getRoutineExpenses', year: routineYear, month: routineMonth });
+    renderRoutineForm(data.records || []);
+  } catch(e) {
+    form.innerHTML = '<div class="empty-state">取得に失敗しました</div>';
+  }
+}
+
+function renderRoutineForm(records) {
+  const form = document.getElementById('routine-form');
+  let html = '';
+  ROUTINE_ITEMS.forEach((ri, i) => {
+    const existing = records.find(r => r.item === routineFullItem(ri));
+    const val = existing ? existing.amount : '';
+    html += `<div class="form-group">
+      <label class="form-label">${ri.item}</label>
+      <input type="number" class="form-input" id="routine-amt-${i}" value="${val}" placeholder="未発生" inputmode="numeric">
+    </div>`;
+  });
+  form.innerHTML = html;
+
+  const btn = document.getElementById('routine-submit-btn');
+  btn.textContent = records.length > 0 ? 'この月の内容を更新する' : 'この月の内容を登録する';
+}
+
+async function submitRoutineExpenses() {
+  if (!navigator.onLine) { showToast('オフライン中は登録できません'); return; }
+  const items = ROUTINE_ITEMS.map((ri, i) => ({
+    item: routineFullItem(ri),
+    amount: document.getElementById(`routine-amt-${i}`).value,
+    note: ''
+  }));
+
+  const btn = document.getElementById('routine-submit-btn');
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '登録中...';
+
+  try {
+    await gasPost({ action: 'saveRoutineExpenses', year: routineYear, month: routineMonth, items });
+    showToast('✓ 登録しました');
+    await loadRoutineExpenses();
+  } catch(e) {
+    showToast('登録に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+  
 // ===================================================
 // PIN認証
 // ===================================================
