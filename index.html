@@ -740,7 +740,7 @@ function showScreen(name, pushStack = true) {
   // 画面固有の初期化
   if (name === 'menu')       initMenu();
   if (name === 'collection') initCollection();
-  if (name === 'residents')  renderResidentList();
+  if (name === 'residents')  initResidents();
   if (name === 'ledger')     initLedger();
   if (name === 'expense')    initExpense();
   if (name === 'coldoc')     initColDoc();
@@ -1803,6 +1803,16 @@ function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
 // ===================================================
 // 住人情報管理
 // ===================================================
+async function initResidents() {
+  renderResidentList(); // まずキャッシュを即座に表示
+  if (navigator.onLine) {
+    try {
+      await refreshResidents();
+      renderResidentList(); // 最新データで再描画
+    } catch(e) { /* 取得失敗時はキャッシュ表示のまま */ }
+  }
+}
+
 function renderResidentList() {
   const query = (document.getElementById('resident-search-input')?.value || '').trim().toLowerCase();
   const list = document.getElementById('resident-list');
@@ -2546,8 +2556,23 @@ async function refreshInvalidPeriods() {
   await dbPutAll('invalid_periods', invalidPeriods);
 }
 
-function initInvalidPeriods() {
-  renderInvalidPeriodsList();
+// 住人マスタだけを最新化する（unpaid・pendingRoomsには触れない）
+async function refreshResidents() {
+  const data = await gasGet({ action: 'getResidents' });
+  residents = data.residents || [];
+  lsSave();
+  await dbClear('residents');
+  await dbPutAll('residents', residents);
+}
+
+async function initInvalidPeriods() {
+  renderInvalidPeriodsList(); // まずキャッシュを即座に表示
+  if (navigator.onLine) {
+    try {
+      await refreshInvalidPeriods();
+      renderInvalidPeriodsList(); // 最新データで再描画
+    } catch(e) { /* 取得失敗時はキャッシュ表示のまま */ }
+  }
 }
 
 function renderInvalidPeriodsList() {
