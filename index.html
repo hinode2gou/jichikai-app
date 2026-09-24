@@ -2989,6 +2989,47 @@ window.addEventListener('offline', () => { document.getElementById('offline-bann
     await startApp();
   }
 })();
+// ===================================================
+// スプレッドシートそのものを複製してバックアップ
+// ===================================================
+function backupSpreadsheet() {
+  const ssFile = DriveApp.getFileById(SHEET_ID);
+  const parentFolder = ssFile.getParents().hasNext()
+    ? ssFile.getParents().next() : DriveApp.getRootFolder();
+
+  const BACKUP_DIR_NAME = 'バックアップ';
+  const backupIt = parentFolder.getFoldersByName(BACKUP_DIR_NAME);
+  const backupFolder = backupIt.hasNext()
+    ? backupIt.next() : parentFolder.createFolder(BACKUP_DIR_NAME);
+
+  const timestamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss');
+  const copyName = `自治会集金管理_backup_${timestamp}`;
+
+  const copiedFile = ssFile.makeCopy(copyName, backupFolder);
+
+  cleanOldBackups(backupFolder);
+
+  return { success: true, fileUrl: copiedFile.getUrl(), name: copyName };
+}
+
+// 古いバックアップを整理（直近12件を残す）
+function cleanOldBackups(backupFolder) {
+  const files = [];
+  const it = backupFolder.getFiles();
+  while (it.hasNext()) files.push(it.next());
+  files.sort((a, b) => b.getName().localeCompare(a.getName()));
+  files.slice(12).forEach(f => f.setTrashed(true));
+}
+
+// 月次自動実行の設定（1回だけ実行すればOK）
+function installMonthlyBackupTrigger() {
+  ScriptApp.newTrigger('backupSpreadsheet')
+    .timeBased()
+    .onMonthDay(1)
+    .atHour(3)
+    .create();
+  SpreadsheetApp.getUi().alert('毎月1日 AM3時にバックアップが自動実行されるよう設定しました。');
+}
 </script>
 </body>
 </html>
