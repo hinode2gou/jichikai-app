@@ -384,6 +384,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
               </div>
             </div>
           </div>
+          <div class="menu-card green" onclick="showScreen('householdreceipt')" style="grid-column:1/-1;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div class="menu-card-icon">🧾</div>
+              <div>
+                <div class="menu-card-title">領収書作成（各世帯）</div>
+                <div class="menu-card-sub">期ごとの月ラベルを差し替えて自動生成</div>
+              </div>
+            </div>
+          </div>
           <div class="menu-card blue" onclick="showScreen('hallreceipt')" style="grid-column:1/-1;">
             <div style="display:flex;align-items:center;gap:12px;">
               <div class="menu-card-icon">🧾</div>
@@ -649,6 +658,53 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       </div>
     </div>
 
+    <!-- 領収書作成（各世帯） -->
+    <div id="screen-householdreceipt" style="display:none;">
+      <div class="finance-section">
+        <h3>領収書作成（各世帯）</h3>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
+          既存の領収書テンプレート（号室ごとの6ヶ月分スタンプ欄）をもとに、月ラベルだけを選択した年度・期のものに差し替えて生成します。号室欄は従来通り手書きで記入してください。<br>
+          生成後は「自動作成ドキュメント」フォルダに保存されます。
+        </p>
+        <div class="form-group">
+          <label class="form-label">対象年度</label>
+          <select class="form-select" id="householdreceipt-year"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">期</label>
+          <div style="display:flex;gap:8px;">
+            <button class="coldoc-half-btn active" id="householdreceipt-half-mae" onclick="selectHouseholdReceiptHalf('前期')">前期（4〜9月）</button>
+            <button class="coldoc-half-btn" id="householdreceipt-half-kou" onclick="selectHouseholdReceiptHalf('後期')">後期（10〜3月）</button>
+          </div>
+        </div>
+
+        <!-- プレビュー -->
+        <div style="background:var(--gray-l);border-radius:var(--r);padding:12px;margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">🧾 差し替えられる月ラベル</div>
+          <div id="householdreceipt-preview"></div>
+        </div>
+
+        <button class="submit-btn" id="householdreceipt-submit-btn" onclick="submitCreateHouseholdReceipts()">
+          🧾 領収書を生成する
+        </button>
+
+        <!-- 生成結果 -->
+        <div id="householdreceipt-result" style="display:none;margin-top:16px;padding:14px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);">
+          <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px;">✓ 領収書を生成しました</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="householdreceipt-result-path"></div>
+          <a id="householdreceipt-ss-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:6px;">
+            📊 Googleスプレッドシートを開く
+          </a>
+          <a id="householdreceipt-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;margin-bottom:6px;">
+            ⬇️ Excel(.xlsx)でダウンロード
+          </a>
+          <a id="householdreceipt-pdf-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--red);text-decoration:none;">
+            🖨️ PDFでダウンロード（印刷用）
+          </a>
+        </div>
+      </div>
+    </div>
+
     <!-- 集会所使用料領収書作成 -->
     <div id="screen-hallreceipt" style="display:none;">
       <div class="finance-section">
@@ -837,6 +893,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'coldoc')     initColDoc();
   if (name === 'report')     initReport();
   if (name === 'hallreceipt') initHallReceipt();
+  if (name === 'householdreceipt') initHouseholdReceipt();
   if (name === 'notice')     initNotice();
   if (name === 'invalid')    initInvalidPeriods();
   if (name === 'routine')    initRoutineExpense();
@@ -861,6 +918,7 @@ function updateHeader(name) {
     coldoc:     '集金日程ドキュメント作成',
     report:     '会計報告書作成',
     hallreceipt: '集会所使用料領収書作成',
+    householdreceipt: '領収書作成（各世帯）',
     notice:     '滞納通知書作成',
     invalid:    '無効期間管理',
     routine:    '定例出金登録',
@@ -2745,6 +2803,82 @@ async function submitCreateHallReceipts() {
     document.getElementById('hallreceipt-ss-link').href = result.ssUrl;
     document.getElementById('hallreceipt-export-link').href = result.exportUrl;
     document.getElementById('hallreceipt-pdf-link').href = result.pdfUrl;
+    showToast('✓ 領収書を生成しました');
+  } catch(e) {
+    showToast('生成に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🧾 領収書を生成する';
+  }
+}
+
+// ===================================================
+// 領収書作成（各世帯）
+// ===================================================
+let householdReceiptSelectedHalf = '前期';
+
+function initHouseholdReceipt() {
+  const curYear = TERMS[CURRENT_IDX].year;
+  const sel = document.getElementById('householdreceipt-year');
+  sel.innerHTML = '';
+  for (let y = curYear - 1; y <= curYear + 2; y++) {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = `${y}年度`;
+    if (y === curYear) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  householdReceiptSelectedHalf = TERMS[CURRENT_IDX].half;
+  updateHouseholdReceiptHalfBtns();
+  renderHouseholdReceiptPreview();
+  document.getElementById('householdreceipt-result').style.display = 'none';
+  sel.addEventListener('change', renderHouseholdReceiptPreview);
+}
+
+function selectHouseholdReceiptHalf(half) {
+  householdReceiptSelectedHalf = half;
+  updateHouseholdReceiptHalfBtns();
+  renderHouseholdReceiptPreview();
+}
+
+function updateHouseholdReceiptHalfBtns() {
+  document.getElementById('householdreceipt-half-mae').className =
+    'coldoc-half-btn' + (householdReceiptSelectedHalf === '前期' ? ' active' : '');
+  document.getElementById('householdreceipt-half-kou').className =
+    'coldoc-half-btn' + (householdReceiptSelectedHalf === '後期' ? ' active' : '');
+}
+
+function renderHouseholdReceiptPreview() {
+  const year = Number(document.getElementById('householdreceipt-year').value);
+  const half = householdReceiptSelectedHalf;
+  const termMonths = half === '前期' ? [4,5,6,7,8,9] : [10,11,12,1,2,3];
+  const labels = termMonths.map(m => {
+    const y = (half === '後期' && m <= 3) ? year + 1 : year;
+    return `${y}年${m}月`;
+  });
+  document.getElementById('householdreceipt-preview').innerHTML =
+    `<div class="coldoc-preview-row"><span>${labels.join(' / ')}</span></div>`;
+}
+
+async function submitCreateHouseholdReceipts() {
+  if (!navigator.onLine) { showToast('オフライン中は生成できません'); return; }
+  const year = Number(document.getElementById('householdreceipt-year').value);
+  const half = householdReceiptSelectedHalf;
+  const btn  = document.getElementById('householdreceipt-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '生成中... しばらくお待ちください';
+  document.getElementById('householdreceipt-result').style.display = 'none';
+
+  try {
+    const result = await gasPost({ action: 'createHouseholdReceipts', year, half });
+    if (!result.success) throw new Error(result.error || '生成失敗');
+
+    document.getElementById('householdreceipt-result').style.display = 'block';
+    document.getElementById('householdreceipt-result-path').textContent =
+      `保存先: ${result.folderPath}/${result.title}`;
+    document.getElementById('householdreceipt-ss-link').href = result.ssUrl;
+    document.getElementById('householdreceipt-export-link').href = result.exportUrl;
+    document.getElementById('householdreceipt-pdf-link').href = result.pdfUrl;
     showToast('✓ 領収書を生成しました');
   } catch(e) {
     showToast('生成に失敗しました: ' + e.message);
