@@ -384,6 +384,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
               </div>
             </div>
           </div>
+          <div class="menu-card blue" onclick="showScreen('hallreceipt')" style="grid-column:1/-1;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div class="menu-card-icon">🧾</div>
+              <div>
+                <div class="menu-card-title">集会所使用料領収書作成</div>
+                <div class="menu-card-sub">期末に友愛クラブ3団体分をまとめて自動生成</div>
+              </div>
+            </div>
+          </div>
           <div class="menu-card orange" onclick="showScreen('notice')" style="grid-column:1/-1;">
             <div style="display:flex;align-items:center;gap:12px;">
               <div class="menu-card-icon">⚠️</div>
@@ -634,6 +643,50 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       </div>
     </div>
 
+    <!-- 集会所使用料領収書作成 -->
+    <div id="screen-hallreceipt" style="display:none;">
+      <div class="finance-section">
+        <h3>集会所使用料領収書作成</h3>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
+          期末に、集会所を2ヶ月ずつ交代で使用する友愛クラブ3団体（西淡路日之出→新大阪第１→新大阪第２）分の領収書をまとめて自動生成します。<br>
+          金額は各2ヶ月分（¥18,000）、日付は3枚とも期末月の第4木曜日で統一されます。生成後は「自動作成ドキュメント」フォルダに保存されます。
+        </p>
+        <div class="form-group">
+          <label class="form-label">対象年度</label>
+          <select class="form-select" id="hallreceipt-year"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">期</label>
+          <div style="display:flex;gap:8px;">
+            <button class="coldoc-half-btn active" id="hallreceipt-half-mae" onclick="selectHallReceiptHalf('前期')">前期（4〜9月）</button>
+            <button class="coldoc-half-btn" id="hallreceipt-half-kou" onclick="selectHallReceiptHalf('後期')">後期（10〜3月）</button>
+          </div>
+        </div>
+
+        <!-- プレビュー -->
+        <div style="background:var(--gray-l);border-radius:var(--r);padding:12px;margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">🧾 生成される3枚のプレビュー</div>
+          <div id="hallreceipt-preview"></div>
+        </div>
+
+        <button class="submit-btn" id="hallreceipt-submit-btn" onclick="submitCreateHallReceipts()">
+          🧾 領収書を生成する
+        </button>
+
+        <!-- 生成結果 -->
+        <div id="hallreceipt-result" style="display:none;margin-top:16px;padding:14px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);">
+          <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px;">✓ 領収書を生成しました</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="hallreceipt-result-path"></div>
+          <a id="hallreceipt-ss-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:6px;">
+            📊 Googleスプレッドシートを開く
+          </a>
+          <a id="hallreceipt-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;">
+            ⬇️ Excel(.xlsx)でダウンロード
+          </a>
+        </div>
+      </div>
+    </div>
+
     <!-- 滞納通知書作成 -->
     <div id="screen-notice" style="display:none;">
       <div class="finance-section">
@@ -774,6 +827,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'expense')    initExpense();
   if (name === 'coldoc')     initColDoc();
   if (name === 'report')     initReport();
+  if (name === 'hallreceipt') initHallReceipt();
   if (name === 'notice')     initNotice();
   if (name === 'invalid')    initInvalidPeriods();
   if (name === 'routine')    initRoutineExpense();
@@ -797,6 +851,7 @@ function updateHeader(name) {
     expense:    '出金登録',
     coldoc:     '集金日程ドキュメント作成',
     report:     '会計報告書作成',
+    hallreceipt: '集会所使用料領収書作成',
     notice:     '滞納通知書作成',
     invalid:    '無効期間管理',
     routine:    '定例出金登録',
@@ -2596,6 +2651,91 @@ async function submitCreateReport() {
   } finally {
     btn.disabled = false;
     btn.textContent = '📊 会計報告書を生成する';
+  }
+}
+
+// ===================================================
+// 集会所使用料領収書作成
+// ===================================================
+const HALL_CLUB_ROTATION = ['西淡路日之出友愛クラブ', '西淡路新大阪第１友愛クラブ', '西淡路新大阪第２友愛クラブ'];
+let hallReceiptSelectedHalf = '前期';
+
+function initHallReceipt() {
+  const curYear = TERMS[CURRENT_IDX].year;
+  const sel = document.getElementById('hallreceipt-year');
+  sel.innerHTML = '';
+  for (let y = curYear - 1; y <= curYear + 2; y++) {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = `${y}年度`;
+    if (y === curYear) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  hallReceiptSelectedHalf = TERMS[CURRENT_IDX].half;
+  updateHallReceiptHalfBtns();
+  renderHallReceiptPreview();
+  document.getElementById('hallreceipt-result').style.display = 'none';
+  sel.addEventListener('change', renderHallReceiptPreview);
+}
+
+function selectHallReceiptHalf(half) {
+  hallReceiptSelectedHalf = half;
+  updateHallReceiptHalfBtns();
+  renderHallReceiptPreview();
+}
+
+function updateHallReceiptHalfBtns() {
+  document.getElementById('hallreceipt-half-mae').className =
+    'coldoc-half-btn' + (hallReceiptSelectedHalf === '前期' ? ' active' : '');
+  document.getElementById('hallreceipt-half-kou').className =
+    'coldoc-half-btn' + (hallReceiptSelectedHalf === '後期' ? ' active' : '');
+}
+
+function renderHallReceiptPreview() {
+  const year = Number(document.getElementById('hallreceipt-year').value);
+  const half = hallReceiptSelectedHalf;
+  const termMonths = half === '前期' ? [4,5,6,7,8,9] : [10,11,12,1,2,3];
+  const lastMonth = termMonths[5];
+  const lastMonthYear = (half === '後期' && lastMonth <= 3) ? year + 1 : year;
+  const thu = getNthThursday(lastMonthYear, lastMonth, 4);
+  const dateStr = `${thu.getFullYear()}年${String(thu.getMonth()+1).padStart(2,'0')}月${String(thu.getDate()).padStart(2,'0')}日`;
+
+  let html = '';
+  for (let block = 0; block < 3; block++) {
+    const m1 = termMonths[block*2], m2 = termMonths[block*2+1];
+    html += `<div class="coldoc-preview-row">
+      <span>${HALL_CLUB_ROTATION[block]}</span>
+      <span>${String(m1).padStart(2,'0')}月/${String(m2).padStart(2,'0')}月分 ¥18,000</span>
+    </div>`;
+  }
+  html += `<div style="font-size:11px;color:var(--text3);margin-top:6px;">日付：3枚とも${dateStr}</div>`;
+  document.getElementById('hallreceipt-preview').innerHTML = html;
+}
+
+async function submitCreateHallReceipts() {
+  if (!navigator.onLine) { showToast('オフライン中は生成できません'); return; }
+  const year = Number(document.getElementById('hallreceipt-year').value);
+  const half = hallReceiptSelectedHalf;
+  const btn  = document.getElementById('hallreceipt-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '生成中... しばらくお待ちください';
+  document.getElementById('hallreceipt-result').style.display = 'none';
+
+  try {
+    const result = await gasPost({ action: 'createHallUsageReceipts', year, half });
+    if (!result.success) throw new Error(result.error || '生成失敗');
+
+    document.getElementById('hallreceipt-result').style.display = 'block';
+    document.getElementById('hallreceipt-result-path').textContent =
+      `保存先: ${result.folderPath}/${result.title}`;
+    document.getElementById('hallreceipt-ss-link').href = result.ssUrl;
+    document.getElementById('hallreceipt-export-link').href = result.exportUrl;
+    showToast('✓ 領収書を生成しました');
+  } catch(e) {
+    showToast('生成に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🧾 領収書を生成する';
   }
 }
 
