@@ -2245,7 +2245,7 @@ function changeRoutineMonth(delta) {
   loadRoutineExpenses();
 }
 
-async function loadRoutineExpenses() {
+async function loadRoutineExpenses(retry = true) {
   const form = document.getElementById('routine-form');
   form.innerHTML = '<div class="empty-state">読み込み中...</div>';
   if (!navigator.onLine) {
@@ -2256,7 +2256,12 @@ async function loadRoutineExpenses() {
     const data = await gasGet({ action: 'getRoutineExpenses', year: routineYear, month: routineMonth });
     renderRoutineForm(data.records || []);
   } catch(e) {
-    form.innerHTML = '<div class="empty-state">取得に失敗しました</div>';
+    if (retry) {
+      // 通信瞬断対策で1回だけ自動リトライ
+      await loadRoutineExpenses(false);
+    } else {
+      form.innerHTML = `<div class="empty-state">取得に失敗しました<br><button class="invalid-action-btn" style="margin-top:8px;" onclick="loadRoutineExpenses()">もう一度試す</button></div>`;
+    }
   }
 }
 
