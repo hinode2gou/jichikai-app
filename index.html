@@ -2505,6 +2505,9 @@ async function loadReportPreview() {
     const arrears = records
       .filter(r => r.type === '収入' && r.item.includes('滞納回収'))
       .reduce((s,r) => s + Number(r.amount), 0);
+    const nextTerm = records
+      .filter(r => r.type === '収入' && r.item.includes('来期分'))
+      .reduce((s,r) => s + Number(r.amount), 0);
     const utility = records
       .filter(r => r.type === '支出' && (r.item.includes('[公共料金]') || r.item.includes('[清掃費]')))
       .reduce((s,r) => s + Number(r.amount), 0);
@@ -2518,6 +2521,7 @@ async function loadReportPreview() {
         <div class="ledger-room-row"><span>自治会費</span><span>${fmtYen(jichikai)}</span></div>
         <div class="ledger-room-row"><span>集会所使用料</span><span>${fmtYen(hall)}</span></div>
         ${arrears > 0 ? `<div class="ledger-room-row"><span>滞納回収分</span><span>${fmtYen(arrears)}</span></div>` : ''}
+        ${nextTerm > 0 ? `<div class="ledger-room-row"><span>来期分（前受金）</span><span>${fmtYen(nextTerm)}</span></div>` : ''}
         <div style="font-weight:600;color:var(--red);margin:8px 0 4px;">支出（収支記録より）</div>
         <div class="ledger-room-row"><span>電気・水道・清掃代等</span><span>${fmtYen(utility)}</span></div>
         <div class="ledger-room-row"><span>その他（雑費等）</span><span>${fmtYen(misc)}</span></div>
@@ -2558,6 +2562,7 @@ async function submitCreateReport() {
         <div class="ledger-room-row"><span>自治会費</span><span>${fmtYen(s.jichikaiTotal)}</span></div>
         <div class="ledger-room-row"><span>集会所使用料</span><span>${fmtYen(s.hallTotal)}</span></div>
         ${s.arrearsTotal > 0 ? `<div class="ledger-room-row"><span>滞納回収分</span><span>${fmtYen(s.arrearsTotal)}</span></div>` : ''}
+        ${s.nextTermTotal > 0 ? `<div class="ledger-room-row"><span>来期分（前受金）</span><span>${fmtYen(s.nextTermTotal)}</span></div>` : ''}
         ${s.otherIncomeTotal > 0 ? `<div class="ledger-room-row"><span>その他収入</span><span>${fmtYen(s.otherIncomeTotal)}</span></div>` : ''}
         <div class="ledger-room-row" style="font-weight:600;border-top:1px solid var(--green-b);padding-top:4px;">
           <span>収入合計</span><span>${fmtYen(s.incomeTotal)}</span>
