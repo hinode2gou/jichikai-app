@@ -580,10 +580,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
           <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px;">✓ ドキュメントを生成しました</div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="coldoc-result-path"></div>
           <a id="coldoc-doc-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:6px;">
-            📊 Googleスプレッドシートを開く
+            📄 Googleドキュメントを開く
           </a>
-          <a id="coldoc-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;">
-            ⬇️ Excel(.xlsx)でダウンロード
+          <a id="coldoc-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;margin-bottom:6px;">
+            ⬇️ Word(.docx)でダウンロード
+          </a>
+          <a id="coldoc-pdf-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--red);text-decoration:none;">
+            🖨️ PDFでダウンロード（印刷用）
           </a>
         </div>
       </div>
@@ -634,8 +637,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
           <a id="report-ss-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:6px;">
             📊 Googleスプレッドシートを開く
           </a>
-          <a id="report-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;">
+          <a id="report-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;margin-bottom:6px;">
             ⬇️ Excel(.xlsx)でダウンロード
+          </a>
+          <a id="report-pdf-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--red);text-decoration:none;">
+            🖨️ PDFでダウンロード（印刷用）
           </a>
           <!-- 集計サマリー -->
           <div id="report-summary" style="margin-top:12px;font-size:12px;color:var(--text2);"></div>
@@ -680,8 +686,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
           <a id="hallreceipt-ss-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:6px;">
             📊 Googleスプレッドシートを開く
           </a>
-          <a id="hallreceipt-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;">
+          <a id="hallreceipt-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;margin-bottom:6px;">
             ⬇️ Excel(.xlsx)でダウンロード
+          </a>
+          <a id="hallreceipt-pdf-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--red);text-decoration:none;">
+            🖨️ PDFでダウンロード（印刷用）
           </a>
         </div>
       </div>
@@ -2492,6 +2501,7 @@ async function submitCreateDoc() {
       `保存先: ${result.folderPath}/${result.title}`;
     document.getElementById('coldoc-doc-link').href    = result.docUrl;
     document.getElementById('coldoc-export-link').href = result.exportUrl;
+    document.getElementById('coldoc-pdf-link').href     = result.pdfUrl;
     showToast('✓ ドキュメントを生成しました');
   } catch(e) {
     showToast('生成に失敗しました: ' + e.message);
@@ -2624,6 +2634,7 @@ async function submitCreateReport() {
       `保存先: ${result.folderPath}/${result.title}`;
     document.getElementById('report-ss-link').href = result.ssUrl;
     document.getElementById('report-export-link').href = result.exportUrl;
+    document.getElementById('report-pdf-link').href = result.pdfUrl;
     document.getElementById('report-summary').innerHTML = `
       <div style="border-top:1px solid var(--green-b);padding-top:8px;margin-top:4px;">
         <div style="font-weight:600;margin-bottom:4px;font-size:13px;">集計結果</div>
@@ -2730,6 +2741,7 @@ async function submitCreateHallReceipts() {
       `保存先: ${result.folderPath}/${result.title}`;
     document.getElementById('hallreceipt-ss-link').href = result.ssUrl;
     document.getElementById('hallreceipt-export-link').href = result.exportUrl;
+    document.getElementById('hallreceipt-pdf-link').href = result.pdfUrl;
     showToast('✓ 領収書を生成しました');
   } catch(e) {
     showToast('生成に失敗しました: ' + e.message);
