@@ -881,9 +881,9 @@ function getCollectionDays(term) {
     let m = sm + i, y = sy;
     if (m > 12) { m -= 12; y++; }
     const thu = getNthThursday(y, m, 4);
-    // 前期: 奇数月=1-5F, 偶数月=6-11F
-    // 後期: 奇数月=1-5F, 偶数月=6-11F（月の絶対値で判断）
-    const floors = m % 2 === 1 ? '1〜5階' : '6〜11階';
+    // GAS側createCollectionDocと同じ基準（期の何ヶ月目か＝0始まりindex）に合わせる。
+    // 以前は月の奇数/偶数で判定しており、GAS側と1-5F/6-11Fが逆になっていた。
+    const floors = i % 2 === 0 ? '1〜5階' : '6〜11階';
     days.push({ date: thu, floors, month: m, year: y });
   }
   return days;
@@ -2402,14 +2402,15 @@ function renderColDocPreview() {
   const months = half === '前期' ? [4,5,6,7,8,9] : [10,11,12,1,2,3];
 
   let html = '';
-  months.forEach(m => {
+  months.forEach((m, idx) => {
     const y   = (half === '後期' && m <= 3) ? year + 1 : year;
     const thu = getNthThursday(y, m, 4);
     const mm  = String(thu.getMonth() + 1).padStart(2,'0');
     const dd  = String(thu.getDate()).padStart(2,'0');
     const dow = ['日','月','火','水','木','金','土'][thu.getDay()];
-    const floors = m % 2 === 1 ? '1〜5階' : '6〜11階';
-    const cls    = m % 2 === 1 ? 'low' : 'high';
+    // GAS側createCollectionDocと同じ基準（期の何ヶ月目か＝0始まりindex）に合わせる
+    const floors = idx % 2 === 0 ? '1〜5階' : '6〜11階';
+    const cls    = idx % 2 === 0 ? 'low' : 'high';
     html += `<div class="coldoc-preview-row">
       <span>${y}/${mm}/${dd}（${dow}）19:30〜</span>
       <span class="coldoc-preview-floors ${cls}">${floors}</span>
@@ -2605,8 +2606,10 @@ function renderNoticePreview() {
   const prev = document.getElementById('notice-preview');
 
   // unpaidとresidentsの両方が揃っているか確認
+  // ★振込★/★その他★はGAS側createDelinquencyNoticesでも生成対象から除外されるため、
+  // ここでも同じ基準で除外しないと件数・バッジがズレる
   const longList = Object.entries(unpaid)
-    .filter(([room, u]) => Number(u.longFlag) === 1)
+    .filter(([room, u]) => Number(u.longFlag) === 1 && !isSpecialRoom(Number(room)))
     .sort(([a], [b]) => Number(a) - Number(b));
 
   // 名前があるものだけ対象（GAS側でも同様にフィルタ）
@@ -3002,8 +3005,11 @@ window.addEventListener('offline', () => { document.getElementById('offline-bann
     correctPassword = data.password || '0000';
     document.getElementById('pin-screen').style.display = 'flex';
   } catch(e) {
-    document.getElementById('main-app').style.display = 'block';
-    await startApp();
+    // 通信エラーで暗証番号が取得できない場合、認証をスキップしてメイン画面に
+    // 入れてしまわないよう、ここではPIN画面を表示したままエラーを示す。
+    document.getElementById('pin-screen').style.display = 'flex';
+    document.getElementById('pin-error').textContent =
+      'サーバーに接続できませんでした。再読み込みしてください';
   }
 })();
 </script>
