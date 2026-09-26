@@ -53,6 +53,19 @@ Claude Codeがこのディレクトリで起動した際に自動的に読み込
 - `index.html`: 3画面それぞれの生成結果に🖨️PDFリンクを追加
 
 **反映済み:** `clasp push`+デプロイ（GAS @46まで）、`git push`（GitHub Pages）完了。
+
+### [解決済み] 月次自動バックアップがGASプロジェクトごと複製する不具合の修正（2026-09-26）
+
+**経緯:** ユーザーが月初に手動でスプレッドシートをDrive上で複製したところ、紐付いているコンテナバインドスクリプト（このGASプロジェクト自体）まで複製されてしまい、複製されたGASの名称を手動変更する羽目になった。実は`backupSpreadsheet`（月次バックアップ用、既存実装）が`ssFile.makeCopy()`（ファイルまるごとコピー）を使っており、自動実行でも同じ問題が起きる状態だった。
+
+**修正内容:**
+- `gas/コード.js` の `backupSpreadsheet`: `SpreadsheetApp.create()`で紐付きスクリプトのない新規スプレッドシートを作り、元の各シートを`sheet.copyTo(backupSs)`でシート単位にコピーする方式に変更（GASプロジェクトは複製されない）。自動生成される初期シート（「シート1」/「Sheet1」）は削除
+- `installMonthlyBackupTrigger`: 二重登録防止（既存トリガーがあれば`alreadyInstalled:true`を返して何もしない）、`SpreadsheetApp.getUi().alert()`（Apps Scriptエディタから実行するとエラーになる）を削除し戻り値ベースに変更
+- `appsscript.json`: `ScriptApp.getProjectTriggers`/`newTrigger`に必要な`https://www.googleapis.com/auth/script.scriptapp`スコープを追加（追加前は「Specified permissions are not sufficient」エラーで`installMonthlyBackupTrigger`が実行できなかった）
+
+**反映済み:** `clasp push --force`+デプロイ（GAS @51まで、appsscript.jsonの変更が反映されなかったため`--force`が必要だった）。`backupSpreadsheet`を実際に実行し、バックアップ先に9シート全て正しい名前・行数でコピーされていることを確認済み。`installMonthlyBackupTrigger`も実行済み（`alreadyInstalled:false`＝今回新規に有効化）。毎月1日AM3時に自動実行される。
+
+**引き継ぎ時の注意:** 旧環境で手動作成された重複バックアップ（複製されたGASプロジェクト「自治会集金管理-GAS backup」、スプレッドシート「自治会集金管理_backup20260924」）はユーザー側で削除依頼済み。
 ## バグ対応履歴
 
 ### [解決済み] 滞納分/当期分/来期分の判定・集計方式の全面修正（2026-09-26、ClaudeCode移行後）
