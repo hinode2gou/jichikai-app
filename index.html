@@ -412,6 +412,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
               </div>
             </div>
           </div>
+          <div class="menu-card orange" onclick="showScreen('arrears')" style="grid-column:1/-1;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div class="menu-card-icon">🧾</div>
+              <div>
+                <div class="menu-card-title">滞納者集金表作成</div>
+                <div class="menu-card-sub">領収書代わりに、滞納開始月から現在までの済/未済を期ごとに一覧化</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 滞納通知書一括PDFダウンロード（存在する場合のみ表示）-->
@@ -420,6 +429,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
           <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="menu-merged-pdf-date"></div>
           <a id="menu-merged-pdf-link" href="#" target="_blank" style="display:block;padding:12px;background:var(--white);border:1px solid var(--red-b);border-radius:8px;text-align:center;font-size:14px;font-weight:600;color:var(--red);text-decoration:none;">
             ダウンロード（長期滞納者PDF.pdf）
+          </a>
+        </div>
+
+        <!-- 滞納者集金表一括PDFダウンロード（存在する場合のみ表示）-->
+        <div id="menu-merged-arrears-pdf" style="display:none;margin-top:16px;padding:16px;background:var(--red-l);border:1px solid var(--red-b);border-radius:14px;">
+          <div style="font-size:14px;font-weight:700;color:var(--red);margin-bottom:4px;">📥 滞納者集金表一括PDF</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="menu-merged-arrears-pdf-date"></div>
+          <a id="menu-merged-arrears-pdf-link" href="#" target="_blank" style="display:block;padding:12px;background:var(--white);border:1px solid var(--red-b);border-radius:8px;text-align:center;font-size:14px;font-weight:600;color:var(--red);text-decoration:none;">
+            ダウンロード（滞納者集金表.pdf）
           </a>
         </div>
 
@@ -793,6 +811,47 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       </div>
     </div>
 
+    <!-- 滞納者集金表作成 -->
+    <div id="screen-arrears" style="display:none;">
+      <div class="finance-section">
+        <h3>滞納者集金表作成</h3>
+        <p style="font-size:14px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
+          長期滞納者（10ヶ月以上・名前設定済み）を対象に、領収書代わりとして渡す集金表を生成します。滞納開始月を含む期から現在（未払い終了月）までを期ごとに区切り、各月を「済」または空欄で示します。
+        </p>
+
+        <!-- 対象者プレビュー -->
+        <div style="background:var(--gray-l);border-radius:var(--r);padding:14px;margin-bottom:16px;">
+          <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px;">⚠️ 現在の長期滞納者（名前あり）</div>
+          <div id="arrears-preview"></div>
+        </div>
+
+        <!-- ボタン1：個別生成 -->
+        <button class="submit-btn" id="arrears-submit-btn" onclick="submitCreateArrears()" style="background:var(--orange);margin-bottom:10px;">
+          📄 集金表を作成する（個別PDF）
+        </button>
+
+        <!-- ボタン2：まとめPDF -->
+        <button class="submit-btn" id="arrears-merge-btn" onclick="submitMergedArrearsPdf()" style="background:var(--blue2);margin-bottom:10px;">
+          🗂️ 最新ディレクトリから集金表をまとめる
+        </button>
+
+        <!-- ボタン3：古いフォルダ削除 -->
+        <button class="submit-btn" id="arrears-clean-btn" onclick="submitCleanArrears()" style="background:var(--gray);margin-bottom:16px;">
+          🗑️ 古い集金表フォルダを削除する（3件を残す）
+        </button>
+
+        <!-- 結果表示 -->
+        <div id="arrears-result" style="display:none;margin-top:8px;padding:14px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);">
+          <div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:8px;" id="arrears-result-title">✓ 完了しました</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:10px;" id="arrears-result-msg"></div>
+          <a id="arrears-folder-link" href="#" target="_blank" style="display:none;padding:12px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:14px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:8px;">
+            📁 生成フォルダを開く
+          </a>
+          <div id="arrears-result-list" style="margin-top:8px;font-size:13px;color:var(--text2);"></div>
+        </div>
+      </div>
+    </div>
+
       <!-- 無効期間管理 -->
     <div id="screen-invalid" style="display:none;">
       <div class="finance-section">
@@ -895,6 +954,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'hallreceipt') initHallReceipt();
   if (name === 'householdreceipt') initHouseholdReceipt();
   if (name === 'notice')     initNotice();
+  if (name === 'arrears')    initArrears();
   if (name === 'invalid')    initInvalidPeriods();
   if (name === 'routine')    initRoutineExpense();
 }
@@ -920,6 +980,7 @@ function updateHeader(name) {
     hallreceipt: '集会所使用料領収書作成',
     householdreceipt: '領収書作成（各世帯）',
     notice:     '滞納通知書作成',
+    arrears:    '滞納者集金表作成',
     invalid:    '無効期間管理',
     routine:    '定例出金登録',
   };
@@ -980,6 +1041,7 @@ function initMenu() {
 
   // 滞納通知書一括PDFの存在確認
   checkMergedPdf();
+  checkMergedArrearsPdf();
 }
 
 // ===================================================
@@ -3064,6 +3126,169 @@ async function checkMergedPdf() {
     }
   } catch(e) {
     document.getElementById('menu-merged-pdf').style.display = 'none';
+  }
+}
+
+// ===================================================
+// 滞納者集金表作成
+// ===================================================
+function initArrears() {
+  document.getElementById('arrears-result').style.display = 'none';
+  if (Object.keys(unpaid).length === 0 || residents.length === 0) {
+    document.getElementById('arrears-preview').innerHTML =
+      '<div style="font-size:13px;color:var(--text3);">データ読み込み中...</div>';
+    const loader = (navigator.onLine && residents.length === 0)
+      ? loadAll() : loadFromLocal();
+    loader.then(() => renderArrearsPreview());
+  } else {
+    renderArrearsPreview();
+  }
+}
+
+function renderArrearsPreview() {
+  const prev = document.getElementById('arrears-preview');
+
+  // 対象は滞納通知書と同じ基準（GAS側createArrearsPaymentSheetsと揃える）
+  const longList = Object.entries(unpaid)
+    .filter(([room, u]) => Number(u.longFlag) === 1 && !isSpecialRoom(Number(room)))
+    .sort(([a], [b]) => Number(a) - Number(b));
+
+  const longListWithName = longList.filter(([room]) =>
+    (getRoomName(Number(room)) || '').trim() !== ''
+  );
+
+  if (longList.length === 0) {
+    prev.innerHTML = '<div style="font-size:13px;color:var(--text2);">長期滞納者はいません</div>';
+    document.getElementById('arrears-submit-btn').disabled = true;
+    return;
+  }
+
+  let html = '';
+  longList.forEach(([room, u]) => {
+    const name   = getRoomName(Number(room)) || '（名前未設定）';
+    const noName = !getRoomName(Number(room));
+    html += `<div class="ledger-room-row" style="${noName ? 'opacity:0.5;' : ''}">
+      <span style="font-weight:600;">${room}号室 ${name}${noName ? ' ※対象外' : ''}</span>
+      <span style="color:var(--red);font-size:12px;">${u.from}〜${u.to}</span>
+    </div>`;
+  });
+
+  if (longListWithName.length === 0) {
+    html += '<div style="font-size:12px;color:var(--orange);margin-top:8px;">※名前が設定されている方がいないため集金表は生成されません</div>';
+    document.getElementById('arrears-submit-btn').disabled = true;
+  } else {
+    document.getElementById('arrears-submit-btn').disabled = false;
+    html += `<div style="font-size:12px;color:var(--text2);margin-top:6px;">集金表生成対象: ${longListWithName.length}件</div>`;
+  }
+
+  prev.innerHTML = html;
+}
+
+async function submitCreateArrears() {
+  if (!navigator.onLine) { showToast('オフライン中は生成できません'); return; }
+  const btn = document.getElementById('arrears-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '作成中... しばらくお待ちください';
+  showArrearsResult(false);
+
+  try {
+    const result = await gasPost({ action: 'createArrearsPaymentSheets' });
+    if (!result.success) throw new Error(result.error || '生成失敗');
+
+    if (result.count === 0) {
+      showToast('対象者がいません');
+      btn.disabled = false;
+      btn.textContent = '📄 集金表を作成する（個別PDF）';
+      return;
+    }
+
+    showArrearsResult(true,
+      '✓ 個別PDFを生成しました',
+      `${result.count}件の集金表を生成しました。フォルダを開いて確認してください。`,
+      result.folderUrl,
+      result.rooms.map(r =>
+        `<div class="ledger-room-row"><span>${r.room}号室 ${r.name}</span></div>`
+      ).join('')
+    );
+    showToast(`✓ ${result.count}件の集金表を生成しました`);
+  } catch(e) {
+    showToast('生成に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📄 集金表を作成する（個別PDF）';
+  }
+}
+
+async function submitMergedArrearsPdf() {
+  if (!navigator.onLine) { showToast('オフライン中は生成できません'); return; }
+  const btn = document.getElementById('arrears-merge-btn');
+  btn.disabled = true;
+  btn.textContent = 'まとめ中... しばらくお待ちください';
+
+  try {
+    const result = await gasPost({ action: 'createMergedArrearsPdf' });
+    if (!result.success) throw new Error(result.error || '生成失敗');
+
+    showArrearsResult(true,
+      '✓ まとめPDFを生成しました',
+      result.message,
+      result.fileUrl,
+      ''
+    );
+    showToast(result.message);
+    checkMergedArrearsPdf();
+  } catch(e) {
+    showToast('生成に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🗂️ 最新ディレクトリから集金表をまとめる';
+  }
+}
+
+async function submitCleanArrears() {
+  if (!navigator.onLine) { showToast('オフライン中は実行できません'); return; }
+  const btn = document.getElementById('arrears-clean-btn');
+  btn.disabled = true;
+  btn.textContent = '削除中...';
+
+  try {
+    const result = await gasPost({ action: 'cleanOldArrearsSheets' });
+    if (!result.success) throw new Error(result.error || '削除失敗');
+    showToast(result.message);
+  } catch(e) {
+    showToast('削除に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🗑️ 古い集金表フォルダを削除する（3件を残す）';
+  }
+}
+
+function showArrearsResult(show, title='', msg='', folderUrl='', list='') {
+  const el = document.getElementById('arrears-result');
+  el.style.display = show ? 'block' : 'none';
+  if (!show) return;
+  document.getElementById('arrears-result-title').textContent = title;
+  document.getElementById('arrears-result-msg').textContent   = msg;
+  const link = document.getElementById('arrears-folder-link');
+  if (folderUrl) { link.href = folderUrl; link.style.display = 'block'; }
+  else           { link.style.display = 'none'; }
+  document.getElementById('arrears-result-list').innerHTML = list;
+}
+
+async function checkMergedArrearsPdf() {
+  if (!navigator.onLine) return;
+  try {
+    const result = await gasGet({ action: 'getMergedArrearsPdfStatus' });
+    const el = document.getElementById('menu-merged-arrears-pdf');
+    if (result.exists) {
+      el.style.display = 'block';
+      document.getElementById('menu-merged-arrears-pdf-date').textContent = `更新日時: ${result.updated}`;
+      document.getElementById('menu-merged-arrears-pdf-link').href = result.url;
+    } else {
+      el.style.display = 'none';
+    }
+  } catch(e) {
+    document.getElementById('menu-merged-arrears-pdf').style.display = 'none';
   }
 }
 
