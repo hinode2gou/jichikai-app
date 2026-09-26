@@ -1086,14 +1086,21 @@ function receiveMonth(room, monthIdx) {
   pendingRooms.add(room);
 
   const today = new Date();
-  const termStartYM = t.startYM;
+  // 「滞納分/当期分/来期分」は、閲覧中の期ではなく実際の今期（TERMS[CURRENT_IDX]）を基準に判定する。
+  // こうしないと、前払い対応で来期の画面を開いて受領した分が「当期分」に、
+  // 今期内で後日まとめて受領した分が「滞納分」に、それぞれ誤って記録されてしまう。
+  const activeTerm = TERMS[CURRENT_IDX];
   let cur = u.from;
   while (ymToNum(cur) <= ymN) {
     if (!invalidSet.has(cur)) {
+      const curN = ymToNum(cur);
+      const type = curN < ymToNum(activeTerm.startYM) ? '滞納分'
+                 : curN > ymToNum(activeTerm.endYM)   ? '来期分'
+                 : '当期分';
       pendingLedger.push({
         room,
         ym: cur,
-        type: ymToNum(cur) < ymToNum(termStartYM) ? '滞納分' : '当期分',
+        type,
         amount: MONTHLY_FEE,
         receivedAt: today.toISOString().slice(0,10)
       });
@@ -1955,6 +1962,9 @@ async function initLedger() {
     if (s.arrearsCount > 0) {
       rows += `<div class="ledger-row"><span>滞納回収分（${s.arrearsCount}ヶ月）</span><span>¥${s.arrearsTotal.toLocaleString()}</span></div>`;
     }
+    if (s.nextCount > 0) {
+      rows += `<div class="ledger-row"><span>来期分（${s.nextCount}ヶ月）</span><span>¥${s.nextTotal.toLocaleString()}</span></div>`;
+    }
     if (s.grandTotal === 0) {
       rows = '<div style="font-size:13px;color:var(--text2);padding:8px 0;">未反映の受領記録がありません</div>';
     }
@@ -1973,6 +1983,7 @@ async function initLedger() {
         <span>
           ${v.current ? `当期 ¥${v.current.toLocaleString()}` : ''}
           ${v.arrears ? ` 滞納 ¥${v.arrears.toLocaleString()}` : ''}
+          ${v.next ? ` 来期 ¥${v.next.toLocaleString()}` : ''}
         </span>
       </div>`;
     });
