@@ -1240,9 +1240,10 @@ function dbClear(store) {
 // ===================================================
 // GAS通信
 // ===================================================
+let gasCallSeq = 0;
 function gasGet(params) {
   return new Promise((resolve, reject) => {
-    const callbackName = 'gasCallback_' + Date.now();
+    const callbackName = 'gasCallback_' + Date.now() + '_' + (gasCallSeq++);
     const script = document.createElement('script');
     const p = new URLSearchParams(params);
     p.append('callback', callbackName);
@@ -1270,7 +1271,7 @@ function gasGet(params) {
 
 async function gasPost(data) {
   return new Promise((resolve, reject) => {
-    const callbackName = 'gasCallback_' + Date.now();
+    const callbackName = 'gasCallback_' + Date.now() + '_' + (gasCallSeq++);
     const script = document.createElement('script');
     const p = new URLSearchParams();
     p.append('callback', callbackName);
