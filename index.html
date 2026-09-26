@@ -1305,6 +1305,7 @@ function dbClear(store) {
 // GAS通信
 // ===================================================
 let gasCallSeq = 0;
+const GAS_TIMEOUT_MS = 30000; // GAS側の処理が遅いだけで実際は成功していることがあるため、15秒から余裕を持たせた
 function gasGet(params) {
   return new Promise((resolve, reject) => {
     const callbackName = 'gasCallback_' + Date.now() + '_' + (gasCallSeq++);
@@ -1329,7 +1330,7 @@ function gasGet(params) {
         if (document.body.contains(script)) document.body.removeChild(script);
         reject(new Error('タイムアウト'));
       }
-    }, 15000);
+    }, GAS_TIMEOUT_MS);
   });
 }
 
@@ -1358,7 +1359,7 @@ async function gasPost(data) {
         if (document.body.contains(script)) document.body.removeChild(script);
         reject(new Error('タイムアウト'));
       }
-    }, 15000);
+    }, GAS_TIMEOUT_MS);
   });
 }
 
@@ -1515,15 +1516,17 @@ async function syncToGAS() {
   }));
   await gasPost({ action:'syncUnpaid', records });
 
-  // 受領ログを10件ずつ分割して送信（URL長制限対策）
-  if (pendingLedger.length > 0) {
-    const chunkSize = 10;
-    for (let i = 0; i < pendingLedger.length; i += chunkSize) {
-      const chunk = pendingLedger.slice(i, i + chunkSize);
-      await gasPost({ action:'addReceiptLogs', logs: chunk });
-    }
+  // 受領ログを10件ずつ分割して送信（URL長制限対策）。
+  // チャンクが成功するたびにpendingLedgerから随時取り除いて保存することで、
+  // 途中で通信エラーが起きても、次回の同期で送信済み分を再送しないようにする
+  // （GAS側のaddReceiptLogsにも重複防止はあるが、無駄な再送を減らすため）。
+  const chunkSize = 10;
+  while (pendingLedger.length > 0) {
+    const chunk = pendingLedger.slice(0, chunkSize);
+    await gasPost({ action:'addReceiptLogs', logs: chunk });
+    pendingLedger = pendingLedger.slice(chunkSize);
     await dbClear('pending_ledger');
-    pendingLedger = [];
+    if (pendingLedger.length > 0) await dbPutAll('pending_ledger', pendingLedger);
   }
 
   await dbClear('unpaid');
