@@ -1927,100 +1927,89 @@ async function saveResident(room) {
 // ===================================================
 // 出納連携
 // ===================================================
-function initLedger() {
-  const t = TERMS[CURRENT_IDX];
-  document.getElementById('ledger-term-title').textContent = `${t.year}年度 ${t.half} 集金まとめ`;
-
-  // pendingLedger を集計
-  const currentTerm = pendingLedger.filter(l => l.type === '当期分');
-  const arrearsPayment = pendingLedger.filter(l => l.type === '滞納分');
-  const currentTotal = currentTerm.reduce((s, l) => s + l.amount, 0);
-  const arrearsTotal = arrearsPayment.reduce((s, l) => s + l.amount, 0);
-  const grandTotal = currentTotal + arrearsTotal;
-
-  let rows = '';
-  if (currentTerm.length > 0) {
-    rows += `<div class="ledger-row"><span>当期分（${currentTerm.length}ヶ月）</span><span>¥${currentTotal.toLocaleString()}</span></div>`;
-  }
-  if (arrearsPayment.length > 0) {
-    rows += `<div class="ledger-row"><span>滞納回収分（${arrearsPayment.length}ヶ月）</span><span>¥${arrearsTotal.toLocaleString()}</span></div>`;
-  }
-  if (grandTotal === 0) {
-    rows = '<div style="font-size:13px;color:var(--text2);padding:8px 0;">未反映の受領記録がありません</div>';
-  }
-  rows += `<div class="ledger-row total"><span>合計</span><span>¥${grandTotal.toLocaleString()}</span></div>`;
-  document.getElementById('ledger-rows').innerHTML = rows;
+// 出納連携は「受領ログ」シート（サーバー側）を正として動作する。
+// 以前はブラウザのローカルデータ（pendingLedger）だけを見ていたため、
+// 別の端末や別の同期タイミングでは反映すべき金額が消えてしまう問題があった。
+async function initLedger() {
+  document.getElementById('ledger-term-title').textContent = '未反映の受領記録（受領ログより）';
+  document.getElementById('ledger-rows').innerHTML =
+    '<div style="font-size:13px;color:var(--text2);padding:8px 0;">集計中...</div>';
 
   const syncBtn = document.getElementById('ledger-sync-btn');
-  syncBtn.disabled = grandTotal === 0 || !navigator.onLine;
-  syncBtn.textContent = navigator.onLine ? '収支記録に反映する' : '（オフライン中）';
+  syncBtn.disabled = true;
 
-  // 部屋ごとの明細
-  const byRoom = {};
-  pendingLedger.forEach(l => {
-    if (!byRoom[l.room]) byRoom[l.room] = { current: 0, arrears: 0 };
-    if (l.type === '当期分') byRoom[l.room].current += l.amount;
-    else byRoom[l.room].arrears += l.amount;
-  });
-
-  let detailHtml = '';
-  Object.entries(byRoom).sort(([a],[b]) => a-b).forEach(([room, v]) => {
-    const name = getRoomName(room);
-    detailHtml += `<div class="ledger-room-row">
-      <span>${room}号室 ${name}</span>
-      <span>
-        ${v.current ? `当期 ¥${v.current.toLocaleString()}` : ''}
-        ${v.arrears ? ` 滞納 ¥${v.arrears.toLocaleString()}` : ''}
-      </span>
-    </div>`;
-  });
-  document.getElementById('ledger-detail-rows').innerHTML = detailHtml || '<div style="font-size:13px;color:var(--text2);padding:8px 0;">なし</div>';
-}
-
-async function doLedgerSync() {
-  if (pendingLedger.length === 0) { showToast('反映する受領記録がありません'); return; }
-  if (!navigator.onLine) { showToast('オフライン中です'); return; }
-
-  const t = TERMS[CURRENT_IDX];
-  const currentTerm = pendingLedger.filter(l => l.type === '当期分');
-  const arrearsPayment = pendingLedger.filter(l => l.type === '滞納分');
-  const today = new Date().toISOString().slice(0,10);
-
-  const records = [];
-  if (currentTerm.length > 0) {
-    records.push({
-      date: today,
-      year: t.year,
-      half: t.half,
-      type: '収入',
-      item: `自治会費（${currentTerm.length}ヶ月分）`,
-      amount: currentTerm.reduce((s,l) => s+l.amount, 0),
-      note: '当期分'
-    });
-  }
-  if (arrearsPayment.length > 0) {
-    records.push({
-      date: today,
-      year: t.year,
-      half: t.half,
-      type: '収入',
-      item: `滞納回収（${arrearsPayment.length}ヶ月分）`,
-      amount: arrearsPayment.reduce((s,l) => s+l.amount, 0),
-      note: '滞納分回収'
-    });
+  if (!navigator.onLine) {
+    document.getElementById('ledger-rows').innerHTML =
+      '<div style="font-size:13px;color:var(--text2);padding:8px 0;">オフライン中は確認できません</div>';
+    syncBtn.textContent = '（オフライン中）';
+    return;
   }
 
   try {
-    for (const rec of records) {
-      await gasPost({ action: 'addFinance', record: rec });
+    const s = await gasGet({ action: 'getLedgerLogSummary' });
+
+    let rows = '';
+    if (s.currentCount > 0) {
+      rows += `<div class="ledger-row"><span>当期分（${s.currentCount}ヶ月）</span><span>¥${s.currentTotal.toLocaleString()}</span></div>`;
     }
-    await dbClear('pending_ledger');
-    pendingLedger = [];
-    showToast('✓ 収支記録に反映しました');
-    initLedger();
+    if (s.arrearsCount > 0) {
+      rows += `<div class="ledger-row"><span>滞納回収分（${s.arrearsCount}ヶ月）</span><span>¥${s.arrearsTotal.toLocaleString()}</span></div>`;
+    }
+    if (s.grandTotal === 0) {
+      rows = '<div style="font-size:13px;color:var(--text2);padding:8px 0;">未反映の受領記録がありません</div>';
+    }
+    rows += `<div class="ledger-row total"><span>合計</span><span>¥${s.grandTotal.toLocaleString()}</span></div>`;
+    document.getElementById('ledger-rows').innerHTML = rows;
+
+    syncBtn.disabled = s.grandTotal === 0;
+    syncBtn.textContent = '収支記録に反映する';
+
+    // 部屋ごとの明細
+    let detailHtml = '';
+    Object.entries(s.byRoom || {}).sort(([a],[b]) => a-b).forEach(([room, v]) => {
+      const name = getRoomName(room);
+      detailHtml += `<div class="ledger-room-row">
+        <span>${room}号室 ${name}</span>
+        <span>
+          ${v.current ? `当期 ¥${v.current.toLocaleString()}` : ''}
+          ${v.arrears ? ` 滞納 ¥${v.arrears.toLocaleString()}` : ''}
+        </span>
+      </div>`;
+    });
+    document.getElementById('ledger-detail-rows').innerHTML = detailHtml || '<div style="font-size:13px;color:var(--text2);padding:8px 0;">なし</div>';
+  } catch(e) {
+    document.getElementById('ledger-rows').innerHTML =
+      '<div style="font-size:13px;color:var(--red);padding:8px 0;">取得に失敗しました</div>';
+    syncBtn.textContent = '収支記録に反映する';
+  }
+}
+
+async function doLedgerSync() {
+  if (!navigator.onLine) { showToast('オフライン中です'); return; }
+
+  const btn = document.getElementById('ledger-sync-btn');
+  btn.disabled = true;
+  btn.textContent = '反映中...';
+
+  try {
+    const result = await gasPost({ action: 'syncLedgerFromLog' });
+    if (!result.success) throw new Error(result.error || '反映失敗');
+
+    if (!result.reflected || result.reflected.length === 0) {
+      showToast('反映する受領記録がありません');
+    } else {
+      const totalAmount = result.reflected.reduce((s, r) => s + r.amount, 0);
+      let msg = `✓ ¥${totalAmount.toLocaleString()} を収支記録に反映しました`;
+      if (result.duplicateSkipped > 0) {
+        msg += `（重複 ${result.duplicateSkipped}件はスキップ）`;
+      }
+      showToast(msg);
+    }
+    await initLedger();
     initMenu();
   } catch(e) {
     showToast('反映に失敗しました');
+    await initLedger();
   }
 }
 
