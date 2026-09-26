@@ -605,7 +605,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
         <div class="form-group">
           <label class="form-label">前期繰越金（円）</label>
           <input type="number" class="form-input" id="report-carryover" placeholder="0" inputmode="numeric">
-          <div style="font-size:11px;color:var(--text3);margin-top:4px;">前期の残高（次期繰越金）を入力してください</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;" id="report-carryover-hint">前期の残高（次期繰越金）を入力してください</div>
         </div>
 
         <!-- 集計プレビュー -->
@@ -2493,9 +2493,22 @@ async function loadReportPreview() {
     return;
   }
   try {
-    const data    = await gasGet({ action: 'getFinance', year, half });
+    const [data, suggestion] = await Promise.all([
+      gasGet({ action: 'getFinance', year, half }),
+      gasGet({ action: 'getSuggestedCarryover', year, half }).catch(() => ({ found: false }))
+    ]);
     const records = data.records || [];
     const fmtYen  = n => `¥${Number(n).toLocaleString()}`;
+
+    const carryoverInput = document.getElementById('report-carryover');
+    const carryoverHint  = document.getElementById('report-carryover-hint');
+    if (suggestion && suggestion.found) {
+      carryoverInput.value = suggestion.carryover;
+      carryoverHint.textContent =
+        `${suggestion.prevYear}年度${suggestion.prevHalf}の残額から自動入力（修正可）`;
+    } else {
+      carryoverHint.textContent = '前期の記録が見つからないため手入力してください';
+    }
 
     const jichikai = records
       .filter(r => r.type === '収入' && r.item.includes('自治会費'))
