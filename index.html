@@ -1086,14 +1086,14 @@ function receiveMonth(room, monthIdx) {
   pendingRooms.add(room);
 
   const today = new Date();
-  const todayYM = `${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,'0')}`;
+  const termStartYM = t.startYM;
   let cur = u.from;
   while (ymToNum(cur) <= ymN) {
     if (!invalidSet.has(cur)) {
       pendingLedger.push({
         room,
         ym: cur,
-        type: ymToNum(cur) < ymToNum(todayYM) ? '滞納分' : '当期分',
+        type: ymToNum(cur) < ymToNum(termStartYM) ? '滞納分' : '当期分',
         amount: MONTHLY_FEE,
         receivedAt: today.toISOString().slice(0,10)
       });
