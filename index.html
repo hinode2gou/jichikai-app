@@ -1426,6 +1426,9 @@ function dbClear(store) {
 // ===================================================
 let gasCallSeq = 0;
 const GAS_TIMEOUT_MS = 30000; // GAS側の処理が遅いだけで実際は成功していることがあるため、15秒から余裕を持たせた
+// 通知書・集金表・まとめPDFなど、件数分だけ時間がかかる重い処理用。
+// 実測（25件）: 通知書作成 約85秒、まとめPDF 約30秒。件数が増えても余裕を持たせる
+const GAS_TIMEOUT_MS_LONG = 180000;
 function gasGet(params) {
   return new Promise((resolve, reject) => {
     const callbackName = 'gasCallback_' + Date.now() + '_' + (gasCallSeq++);
@@ -1454,7 +1457,7 @@ function gasGet(params) {
   });
 }
 
-async function gasPost(data) {
+async function gasPost(data, timeoutMs = GAS_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const callbackName = 'gasCallback_' + Date.now() + '_' + (gasCallSeq++);
     const script = document.createElement('script');
@@ -1479,7 +1482,7 @@ async function gasPost(data) {
         if (document.body.contains(script)) document.body.removeChild(script);
         reject(new Error('タイムアウト'));
       }
-    }, GAS_TIMEOUT_MS);
+    }, timeoutMs);
   });
 }
 
@@ -3027,7 +3030,7 @@ async function submitCreateNotice() {
   showNoticeResult(false);
 
   try {
-    const result = await gasPost({ action: 'createDelinquencyNotices' });
+    const result = await gasPost({ action: 'createDelinquencyNotices' }, GAS_TIMEOUT_MS_LONG);
     if (!result.success) throw new Error(result.error || '生成失敗');
 
     if (result.count === 0) {
@@ -3062,7 +3065,7 @@ async function submitMergedPdf() {
   btn.textContent = 'まとめ中... しばらくお待ちください';
 
   try {
-    const result = await gasPost({ action: 'createMergedPdf' });
+    const result = await gasPost({ action: 'createMergedPdf' }, GAS_TIMEOUT_MS_LONG);
     if (!result.success) throw new Error(result.error || '生成失敗');
 
     showNoticeResult(true,
@@ -3192,7 +3195,7 @@ async function submitCreateArrears() {
   showArrearsResult(false);
 
   try {
-    const result = await gasPost({ action: 'createArrearsPaymentSheets' });
+    const result = await gasPost({ action: 'createArrearsPaymentSheets' }, GAS_TIMEOUT_MS_LONG);
     if (!result.success) throw new Error(result.error || '生成失敗');
 
     if (result.count === 0) {
@@ -3226,7 +3229,7 @@ async function submitMergedArrearsPdf() {
   btn.textContent = 'まとめ中... しばらくお待ちください';
 
   try {
-    const result = await gasPost({ action: 'createMergedArrearsPdf' });
+    const result = await gasPost({ action: 'createMergedArrearsPdf' }, GAS_TIMEOUT_MS_LONG);
     if (!result.success) throw new Error(result.error || '生成失敗');
 
     showArrearsResult(true,
