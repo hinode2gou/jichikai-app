@@ -361,6 +361,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             <div class="menu-card-title">出金登録</div>
             <div class="menu-card-sub">公共料金・清掃費・雑費</div>
           </div>
+          <div class="menu-card green" onclick="showScreen('income')">
+            <div class="menu-card-icon">💰</div>
+            <div class="menu-card-title">収入登録</div>
+            <div class="menu-card-sub">集会所使用料・その他収入</div>
+          </div>
           <div class="menu-card purple" onclick="showScreen('invalid')">
             <div class="menu-card-icon">🏠</div>
             <div class="menu-card-title">無効期間管理</div>
@@ -566,7 +571,51 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
           <div class="term-center"><div class="term-name" id="expense-month-label" style="font-size:14px;">-</div></div>
           <button class="term-arrow" onclick="changeExpenseMonth(1)">›</button>
         </div>
-      
+
+      </div>
+    </div>
+
+    <!-- 収入登録 -->
+    <div id="screen-income" style="display:none;">
+      <div class="finance-section">
+        <h3>収入を登録する</h3>
+        <div class="form-group">
+          <label class="form-label">区分</label>
+          <select class="form-select" id="inc-type" onchange="renderQuickItemsIncome()">
+            <option value="集会所使用料">集会所使用料</option>
+            <option value="その他収入">その他収入</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">項目（よく使うものをタップ）</label>
+          <div class="quick-items" id="quick-items-income"></div>
+          <input type="text" class="form-input" id="inc-item" placeholder="項目名を入力" style="margin-top:6px;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">金額（円）</label>
+          <input type="number" class="form-input" id="inc-amount" placeholder="0" inputmode="numeric">
+        </div>
+        <div class="form-group">
+          <label class="form-label">日付</label>
+          <input type="date" class="form-input" id="inc-date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">備考（任意）</label>
+          <input type="text" class="form-input" id="inc-note" placeholder="備考">
+        </div>
+        <button class="submit-btn" onclick="submitIncome()" id="inc-submit-btn">収入を登録する</button>
+
+        <div class="finance-history" id="income-history">
+          <div class="ledger-detail-title" style="margin-bottom:10px;">今期の収入履歴</div>
+          <div id="income-history-list"><div class="empty-state">履歴を読み込み中...</div></div>
+        </div>
+
+        <div class="term-bar" style="padding:6px 0;background:var(--gray-l);margin:0 -14px 14px;">
+          <button class="term-arrow" onclick="changeIncomeMonth(-1)">‹</button>
+          <div class="term-center"><div class="term-name" id="income-month-label" style="font-size:14px;">-</div></div>
+          <button class="term-arrow" onclick="changeIncomeMonth(1)">›</button>
+        </div>
+
       </div>
     </div>
 
@@ -899,7 +948,19 @@ for (let y = 2023; y <= 2028; y++) {
   TERMS.push(makeTerm(y,'前期'));
   TERMS.push(makeTerm(y,'後期'));
 }
-const CURRENT_IDX = TERMS.findIndex(t => t.year===2026 && t.half==='前期');
+// 年月→期（年度・前期/後期）への変換。gas/コード.jsのymToTermInfoと同じロジック
+// （4〜9月はその年の前期、10月以降はその年の後期、1〜3月は前年の後期）
+function ymToTermInfo(year, month) {
+  if (month >= 4) return { year, half: month <= 9 ? '前期' : '後期' };
+  return { year: year - 1, half: '後期' };
+}
+function getCurrentTermIndex() {
+  const now  = new Date();
+  const info = ymToTermInfo(now.getFullYear(), now.getMonth() + 1);
+  const idx  = TERMS.findIndex(t => t.year === info.year && t.half === info.half);
+  return idx >= 0 ? idx : TERMS.length - 1;
+}
+const CURRENT_IDX = getCurrentTermIndex();
 let viewIdx = CURRENT_IDX;
 function viewTerm() { return TERMS[viewIdx]; }
 function termRelation(idx) {
@@ -927,7 +988,7 @@ let currentTab    = 'col';
 
 function showScreen(name, pushStack = true) {
   // 全画面非表示
-  ['menu','collection','residents','ledger','expense','coldoc','report','notice','invalid','routine'].forEach(s => {
+  ['menu','collection','residents','ledger','expense','income','coldoc','report','hallreceipt','householdreceipt','notice','arrears','invalid','routine'].forEach(s => {
     document.getElementById('screen-' + s).style.display = 'none';
   });
   document.getElementById('screen-' + name).style.display = 'block';
@@ -949,6 +1010,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'residents')  initResidents();
   if (name === 'ledger')     initLedger();
   if (name === 'expense')    initExpense();
+  if (name === 'income')     initIncome();
   if (name === 'coldoc')     initColDoc();
   if (name === 'report')     initReport();
   if (name === 'hallreceipt') initHallReceipt();
@@ -975,6 +1037,7 @@ function updateHeader(name) {
     residents:  '住人情報管理',
     ledger:     '出納連携',
     expense:    '出金登録',
+    income:     '収入登録',
     coldoc:     '集金日程ドキュメント作成',
     report:     '会計報告書作成',
     hallreceipt: '集会所使用料領収書作成',
@@ -1881,12 +1944,20 @@ function changeView(d) {
   const ni = viewIdx + d;
   if (ni < 0 || ni >= TERMS.length) return;
   viewIdx = ni;
-  currentFloor = null;
-  floorIdx = 0;
-  document.getElementById('back-btn').textContent = '← メニュー';
-  document.getElementById('header-title').textContent = '自治会費管理';
-  document.getElementById('room-view').style.display  = 'none';
-  document.getElementById('floor-view').style.display = 'block';
+  // 期を切り替えても選択中のフロアは維持する。以前は毎回「全フロア」表示に
+  // 戻ってしまい、同じフロアのまま期をまたいで確認したい場合に毎回フロアを
+  // 選び直す必要があって不便だったため、フロア選択中はそのまま留まるようにした
+  if (currentFloor !== null) {
+    document.getElementById('back-btn').textContent = `← ${currentFloor}F`;
+    document.getElementById('header-title').textContent = `${currentFloor}F 集金`;
+    document.getElementById('room-view').style.display  = 'block';
+    document.getElementById('floor-view').style.display = 'none';
+  } else {
+    document.getElementById('back-btn').textContent = '← メニュー';
+    document.getElementById('header-title').textContent = '自治会費管理';
+    document.getElementById('room-view').style.display  = 'none';
+    document.getElementById('floor-view').style.display = 'block';
+  }
   updateFloorBar();
   renderAll();
 }
@@ -2399,6 +2470,183 @@ async function doDeleteExpense(rowIndex) {
     showToast('✓ 削除しました');
     closeModal();
     loadExpenseHistory();
+  } catch(e) {
+    showToast('削除に失敗しました: ' + e.message);
+  }
+}
+
+// ===================================================
+// 収入登録
+// ===================================================
+const QUICK_ITEMS_INCOME = {
+  '集会所使用料': ['集会所使用料'],
+  'その他収入':   ['雑収入']
+};
+
+let incomeYear, incomeMonth;
+
+function initIncome() {
+  const today = new Date();
+  document.getElementById('inc-date').value = today.toISOString().slice(0,10);
+  if (!incomeYear) { incomeYear = today.getFullYear(); incomeMonth = today.getMonth() + 1; }
+  renderIncomeMonthLabel();
+  renderQuickItemsIncome();
+  loadIncomeHistory();
+}
+
+function renderIncomeMonthLabel() {
+  document.getElementById('income-month-label').textContent = `${incomeYear}年${incomeMonth}月`;
+}
+
+function changeIncomeMonth(delta) {
+  incomeMonth += delta;
+  if (incomeMonth > 12) { incomeMonth = 1; incomeYear++; }
+  if (incomeMonth < 1)  { incomeMonth = 12; incomeYear--; }
+  renderIncomeMonthLabel();
+  loadIncomeHistory();
+}
+
+function renderQuickItemsIncome() {
+  const type = document.getElementById('inc-type').value;
+  const items = QUICK_ITEMS_INCOME[type] || [];
+  const container = document.getElementById('quick-items-income');
+  container.innerHTML = items.map(item =>
+    `<div class="quick-item" onclick="selectQuickItemIncome(this,'${item}')">${item}</div>`
+  ).join('');
+}
+
+function selectQuickItemIncome(el, item) {
+  document.querySelectorAll('#quick-items-income .quick-item').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('inc-item').value = item;
+}
+
+async function submitIncome() {
+  const item   = document.getElementById('inc-item').value.trim();
+  const amount = Number(document.getElementById('inc-amount').value);
+  const date   = document.getElementById('inc-date').value;
+  const note   = document.getElementById('inc-note').value.trim();
+
+  if (!item)   { showToast('項目名を入力してください'); return; }
+  if (!amount || amount <= 0) { showToast('金額を入力してください'); return; }
+  if (!date)   { showToast('日付を入力してください'); return; }
+
+  if (!navigator.onLine) { showToast('オフライン中は登録できません。Wi-Fi接続後に登録してください'); return; }
+
+  const btn = document.getElementById('inc-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '登録中...';
+
+  const t = TERMS[CURRENT_IDX];
+  try {
+    await gasPost({
+      action: 'addFinance',
+      record: { date, year: t.year, half: t.half, type: '収入', item, amount, note }
+    });
+    showToast('✓ 収入を登録しました');
+    document.getElementById('inc-item').value   = '';
+    document.getElementById('inc-amount').value = '';
+    document.getElementById('inc-note').value   = '';
+    document.querySelectorAll('#quick-items-income .quick-item').forEach(e => e.classList.remove('selected'));
+    loadIncomeHistory();
+  } catch(e) {
+    showToast('登録に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '収入を登録する';
+  }
+}
+
+async function loadIncomeHistory() {
+  const listEl = document.getElementById('income-history-list');
+  if (!navigator.onLine) {
+    listEl.innerHTML = '<div class="empty-state">オフライン中は履歴を表示できません</div>';
+    return;
+  }
+  const t = monthToTerm(incomeYear, incomeMonth);
+  const targetYm = `${incomeYear}/${String(incomeMonth).padStart(2,'0')}`;
+  try {
+    const data = await gasGet({ action:'getFinance', year: t.year, half: t.half });
+    const records = (data.records || []).filter(r => r.type === '収入' && r.date && r.date.slice(0,7) === targetYm);
+    if (records.length === 0) {
+      listEl.innerHTML = '<div class="empty-state">この月の収入記録はありません</div>';
+      return;
+    }
+    listEl.innerHTML = records.reverse().map(r => `
+      <div class="finance-history-item" onclick="openEditIncomeModal(${r.rowIndex},'${escapeAttr(r.item)}',${r.amount},'${escapeAttr(r.note)}')" style="cursor:pointer;">
+        <div class="fh-left">
+          <div class="fh-date">${r.date}</div>
+          <div class="fh-item">${r.item}<span class="fh-type income">収入</span></div>
+          ${r.note ? `<div style="font-size:11px;color:var(--text3);">${r.note}</div>` : ''}
+        </div>
+        <div class="fh-amount income">¥${Number(r.amount).toLocaleString()}</div>
+      </div>`).join('');
+  } catch(e) {
+    listEl.innerHTML = '<div class="empty-state">履歴の読み込みに失敗しました</div>';
+  }
+}
+
+function openEditIncomeModal(rowIndex, item, amount, note) {
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <div class="modal-title">収入記録を編集</div>
+        <div class="form-group">
+          <label class="form-label">項目</label>
+          <input type="text" class="form-input" id="edit-inc-item" value="${item}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">金額（円）</label>
+          <input type="number" class="form-input" id="edit-inc-amount" value="${amount}" inputmode="numeric">
+        </div>
+        <div class="form-group">
+          <label class="form-label">備考</label>
+          <input type="text" class="form-input" id="edit-inc-note" value="${note}">
+        </div>
+        <button class="submit-btn" onclick="saveEditIncome(${rowIndex})" style="margin-bottom:8px;">保存する</button>
+        <button class="invalid-action-btn delete" style="width:100%;padding:11px;margin-bottom:8px;" onclick="confirmDeleteIncome(${rowIndex})">削除する</button>
+        <button class="modal-close" onclick="closeModal()">キャンセル</button>
+      </div>
+    </div>`;
+}
+
+async function saveEditIncome(rowIndex) {
+  if (!navigator.onLine) { showToast('オフライン中は保存できません'); return; }
+  const item   = document.getElementById('edit-inc-item').value.trim();
+  const amount = Number(document.getElementById('edit-inc-amount').value);
+  const note   = document.getElementById('edit-inc-note').value.trim();
+  if (!item || !amount || amount <= 0) { showToast('項目・金額を確認してください'); return; }
+  try {
+    await gasPost({ action: 'updateFinanceRecord', rowIndex, item, amount, note });
+    showToast('✓ 更新しました');
+    closeModal();
+    loadIncomeHistory();
+  } catch(e) {
+    showToast('更新に失敗しました: ' + e.message);
+  }
+}
+
+function confirmDeleteIncome(rowIndex) {
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay">
+      <div class="confirm-modal">
+        <div class="confirm-title">この収入記録を削除しますか？</div>
+        <div class="confirm-body">この操作は取り消せません。</div>
+        <div class="confirm-actions">
+          <button class="confirm-btn cancel" onclick="closeModal()">キャンセル</button>
+          <button class="confirm-btn danger" onclick="doDeleteIncome(${rowIndex})">削除する</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function doDeleteIncome(rowIndex) {
+  if (!navigator.onLine) { showToast('オフライン中は削除できません'); return; }
+  try {
+    await gasPost({ action: 'deleteFinanceRecord', rowIndex });
+    showToast('✓ 削除しました');
+    closeModal();
+    loadIncomeHistory();
   } catch(e) {
     showToast('削除に失敗しました: ' + e.message);
   }
