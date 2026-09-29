@@ -242,7 +242,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .section-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--gray-b);}
 .section-header-title{font-size:14px;font-weight:700;}
 .section-header-action{font-size:12px;color:var(--blue2);cursor:pointer;font-weight:600;}
-.switch-term-btn{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);border-radius:8px;padding:10px 16px;color:var(--white);font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;}
 
 .empty-state{padding:40px 20px;text-align:center;color:var(--text2);font-size:14px;}
 
@@ -375,6 +374,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             <div class="menu-card-icon">🔍</div>
             <div class="menu-card-title">支払い整合性チェック</div>
             <div class="menu-card-sub">受領ログと支払い管理表のズレを診断</div>
+          </div>
+          <div class="menu-card orange" onclick="confirmSwitchTerm()" style="grid-column:1/-1;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div class="menu-card-icon">⏭️</div>
+              <div>
+                <div class="menu-card-title">期切替</div>
+                <div class="menu-card-sub">次の期に切り替える（年2回・要確認）</div>
+              </div>
+            </div>
           </div>
           <div class="menu-card blue" onclick="showScreen('coldoc')" style="grid-column:1/-1;">
             <div style="display:flex;align-items:center;gap:12px;">
@@ -1080,7 +1088,6 @@ function updateHeader(name) {
   const actions = document.getElementById('header-actions');
   if (name === 'collection') {
     actions.innerHTML = `
-      <button class="switch-term-btn" onclick="confirmSwitchTerm()">期切替</button>
       <button class="sync-btn synced" id="sync-btn" onclick="doSync()">✓ 同期済</button>`;
     updateSyncBtn();
   } else if (name === 'menu') {
@@ -1412,11 +1419,58 @@ function unreceiveMonth(room, monthIdx) {
   persistPendingState();
 }
 
-function toggleMonth(room, monthIdx) {
+function ymLabel(ym) {
+  const [y, m] = ym.split('/').map(Number);
+  return `${y}年${m}月`;
+}
+
+// 月セルのタップは即座に受領登録/取消を実行せず、対象となる月（範囲になりうる）を
+// 示した確認ダイアログを挟む。誤タップで何ヶ月分も気づかないまま登録/取消されて
+// しまい、後から見てもどこを操作したか分からなくなる問題への対策。
+// inModal: 部屋詳細モーダル内のセルから呼ばれた場合はtrue（キャンセル/確定後に
+// モーダルを再表示する必要があるため、通常のグリッドからの呼び出しと分岐する）
+function confirmToggleMonth(room, monthIdx, inModal) {
   const status = monthStatus(room, monthIdx);
   if (status === 'invalid') return;
-  if (status === 'unpaid' || status === 'future') receiveMonth(room, monthIdx);
-  else if (status === 'paid') unreceiveMonth(room, monthIdx);
+  const t  = viewTerm();
+  const ym = termMonthYM(t, monthIdx);
+  const u  = unpaid[room];
+  if (!u) return;
+  const name = getRoomName(room);
+  const cancelAction = inModal ? `refreshModal(${room})` : 'closeModal()';
+
+  let months, actionFn;
+  if (status === 'unpaid' || status === 'future') {
+    months = [];
+    let cur = u.from;
+    while (ymToNum(cur) <= ymToNum(ym)) { months.push(cur); cur = addMonths(cur, 1); }
+    actionFn = 'receiveMonth';
+  } else if (status === 'paid') {
+    months = [];
+    let cur = ym;
+    const limit = addMonths(u.from, -1);
+    while (ymToNum(cur) <= ymToNum(limit)) { months.push(cur); cur = addMonths(cur, 1); }
+    actionFn = 'unreceiveMonth';
+  } else {
+    return;
+  }
+  const label = months.map(ymLabel).join('・');
+  const isCancel  = actionFn === 'unreceiveMonth';
+  const okAction  = inModal
+    ? `${actionFn}(${room},${monthIdx});refreshModal(${room})`
+    : `${actionFn}(${room},${monthIdx});closeModal()`;
+
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay">
+      <div class="confirm-modal">
+        <div class="confirm-title">${room}号室 ${name}</div>
+        <div class="confirm-body">${label}分を${isCancel ? '未払いに戻します' : '受領登録します'}。<br>よろしいですか？</div>
+        <div class="confirm-actions">
+          <button class="confirm-btn cancel" onclick="${cancelAction}">キャンセル</button>
+          <button class="confirm-btn ${isCancel ? 'danger' : 'ok'}" onclick="${okAction}">${isCancel ? '未払いにする' : '登録する'}</button>
+        </div>
+      </div>
+    </div>`;
 }
 
 // ===================================================
@@ -1472,6 +1526,7 @@ async function doSwitchTerm(newTermEnd) {
     showToast(`期を ${newTermEnd} 末に切り替えました`);
     updateStats();
     renderAll();
+    initMenu(); // 期切替をメニュー画面から実行しても、未払いバッジ等がすぐ最新化されるように
   } catch(e) {
     showToast('切り替えに失敗しました');
   }
@@ -1951,7 +2006,7 @@ function renderRoomList(f) {
     t.months.forEach((m, i) => {
       const st   = monthStatus(r, i);
       const icon = st === 'paid' ? '✓' : st === 'unpaid' ? '✗' : st === 'invalid' ? '／' : '–';
-      html += `<div class="mc ${st}" onclick="toggleMonth(${r},${i})">
+      html += `<div class="mc ${st}" onclick="confirmToggleMonth(${r},${i},false)">
         <div class="ml">${m}</div>
         <div class="mi">${icon}</div>
       </div>`;
@@ -2125,7 +2180,7 @@ function openModal(room) {
   t.months.forEach((m,i) => {
     const st = monthStatus(room, i);
     const icon = st==='paid' ? '✓' : st==='unpaid' ? '✗' : st==='invalid' ? '／' : '–';
-    monthsHtml += `<div class="modal-mc ${st}" onclick="toggleMonth(${room},${i});refreshModal(${room})">
+    monthsHtml += `<div class="modal-mc ${st}" onclick="confirmToggleMonth(${room},${i},true)">
       <div class="ml">${m}</div><div class="mi">${icon}</div>
     </div>`;
   });
