@@ -371,6 +371,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             <div class="menu-card-title">無効期間管理</div>
             <div class="menu-card-sub">入居前・入院等の集金対象外期間</div>
           </div>
+          <div class="menu-card orange" onclick="showScreen('reconcile')">
+            <div class="menu-card-icon">🔍</div>
+            <div class="menu-card-title">支払い整合性チェック</div>
+            <div class="menu-card-sub">受領ログと支払い管理表のズレを診断</div>
+          </div>
           <div class="menu-card blue" onclick="showScreen('coldoc')" style="grid-column:1/-1;">
             <div style="display:flex;align-items:center;gap:12px;">
               <div class="menu-card-icon">📄</div>
@@ -918,6 +923,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       </div>
     </div>
 
+    <!-- 支払い整合性チェック -->
+    <div id="screen-reconcile" style="display:none;">
+      <div class="finance-section">
+        <h3>支払い整合性チェック</h3>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
+          支払い管理表の「From」（次に払うべき月）と、実際の受領ログの最終受領月を
+          突き合わせ、ズレている部屋がないか確認します。手動でのシート編集や
+          同期漏れがあった場合に発見できます。受領ログの記録がない部屋
+          （振込世帯・未受領の部屋など）は対象外です。
+        </p>
+        <button class="submit-btn" id="reconcile-run-btn" onclick="runReconciliationCheck()">
+          🔍 チェックを実行する
+        </button>
+        <div id="reconcile-result" style="margin-top:16px;"></div>
+      </div>
+    </div>
+
   </div><!-- /screen-container -->
 </div><!-- /main-app -->
 
@@ -988,7 +1010,7 @@ let currentTab    = 'col';
 
 function showScreen(name, pushStack = true) {
   // 全画面非表示
-  ['menu','collection','residents','ledger','expense','income','coldoc','report','hallreceipt','householdreceipt','notice','arrears','invalid','routine'].forEach(s => {
+  ['menu','collection','residents','ledger','expense','income','coldoc','report','hallreceipt','householdreceipt','notice','arrears','invalid','routine','reconcile'].forEach(s => {
     document.getElementById('screen-' + s).style.display = 'none';
   });
   document.getElementById('screen-' + name).style.display = 'block';
@@ -1018,6 +1040,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'notice')     initNotice();
   if (name === 'arrears')    initArrears();
   if (name === 'invalid')    initInvalidPeriods();
+  if (name === 'reconcile') initReconcile();
   if (name === 'routine')    initRoutineExpense();
 }
 
@@ -1045,6 +1068,7 @@ function updateHeader(name) {
     notice:     '滞納通知書作成',
     arrears:    '滞納者集金表作成',
     invalid:    '無効期間管理',
+    reconcile:  '支払い整合性チェック',
     routine:    '定例出金登録',
   };
   document.getElementById('header-title').textContent = titles[name] || '';
@@ -3661,6 +3685,63 @@ async function refreshResidents() {
   lsSave();
   await dbClear('residents');
   await dbPutAll('residents', residents);
+}
+
+// ===================================================
+// 支払い整合性チェック（診断用）
+// ===================================================
+function initReconcile() {
+  document.getElementById('reconcile-result').innerHTML = '';
+}
+
+async function runReconciliationCheck() {
+  if (!navigator.onLine) { showToast('オフライン中は実行できません'); return; }
+  const btn = document.getElementById('reconcile-run-btn');
+  const resultEl = document.getElementById('reconcile-result');
+  btn.disabled = true;
+  btn.textContent = 'チェック中...';
+  resultEl.innerHTML = '<div class="empty-state">確認中...</div>';
+  try {
+    const data = await gasGet({ action: 'checkPaymentReconciliation' });
+    renderReconciliationResult(data);
+  } catch(e) {
+    resultEl.innerHTML = '<div style="font-size:13px;color:var(--red);">チェックに失敗しました: ' + e.message + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 チェックを実行する';
+  }
+}
+
+function renderReconciliationResult(data) {
+  const resultEl = document.getElementById('reconcile-result');
+  const summary = `
+    <div class="ledger-room-row"><span>全体</span><span>${data.totalRooms}室</span></div>
+    <div class="ledger-room-row"><span>突合せ対象（受領ログあり）</span><span>${data.checkedCount}室</span></div>
+    <div class="ledger-room-row"><span>受領ログなし（対象外）</span><span>${data.noLogCount}室</span></div>
+  `;
+  if (data.discrepancyCount === 0) {
+    resultEl.innerHTML = `
+      <div style="padding:14px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:700;color:var(--green);">✓ ズレは見つかりませんでした</div>
+      </div>
+      ${summary}`;
+    return;
+  }
+  const rows = data.discrepancies.map(d => `
+    <div class="finance-history-item">
+      <div class="fh-left">
+        <div class="fh-item">${d.room}号室 ${d.name}</div>
+        <div style="font-size:12px;color:var(--text2);">
+          支払い管理表のFrom: <b>${d.currentFrom}</b> / 受領ログから推測されるFrom: <b>${d.expectedFrom}</b>（最終受領月: ${d.lastPaidMonth}）
+        </div>
+      </div>
+    </div>`).join('');
+  resultEl.innerHTML = `
+    <div style="padding:14px;background:var(--red-l);border:1px solid var(--red-b);border-radius:var(--r);margin-bottom:10px;">
+      <div style="font-size:13px;font-weight:700;color:var(--red);">⚠ ${data.discrepancyCount}件のズレが見つかりました</div>
+    </div>
+    ${rows}
+    <div style="margin-top:10px;">${summary}</div>`;
 }
 
 async function initInvalidPeriods() {
