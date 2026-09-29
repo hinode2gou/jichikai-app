@@ -308,7 +308,7 @@ GAS @61まで反映済み。25件を再生成し「滞納者集金表.pdf」も�
 
 **反映済み:** GAS @86まで、`git push`（GitHub Pages）完了。GAS側の変更（LockService追加・排他的分類・楽観的排他制御・無効期間throughYm）は実際にAPIを呼び出して実データで動作確認済み。フロント側の変更はローカル（`npx serve`）で実際に操作して確認済み。
 
-**引き継ぎ時の注意:** 今回のレビューでは「期切替」「出納連携」「会計報告書」まわりの資金の正確性に関わる問題を中心に直したが、レビュー時に相対的に優先度を下げて見送った指摘もある（例: 出金側の会計報告書集計に収入側と同様の「その他支出」安全弁がない、`createMergedPdf`系が`getRunningFlag`を参照するだけで自身では立てていない、`cleanOldBackups`の`setTrashed`が他の同種処理と違いtry/catchで保護されていない、通知書/集金表・出金/収入登録の大きな重複コードの共通化など）。実害が出た場合や気になった場合は都度対応すること。
+**引き継ぎ時の注意:** 今回のレビューでは「期切替」「出納連携」「会計報告書」まわりの資金の正確性に関わる問題を中心に直したが、レビュー時に相対的に優先度を下げて見送った指摘もあった（出金側の「その他支出」安全弁、`createMergedPdf`系の実行中フラグ未設定、`cleanOldBackups`の`setTrashed`未保護、通知書/集金表・出金/収入登録の重複コード共通化）→ **2026-09-29にすべて対応済み**（下記「技術的な小さな穴の修正・通知書/集金表・出金/収入登録の重複コード整理」参照）。
 
 ### 受領ログの期切替時アーカイブ機能を追加（2026-09-29）
 
@@ -358,6 +358,21 @@ GAS @61まで反映済み。25件を再生成し「滞納者集金表.pdf」も�
 - ユーザーからのフィードバックで、確認ダイアログの「キャンセル」ボタンと取消側の実行ボタン「取り消す」が意味的に紛らわしいと指摘があり、実行ボタンを「未払いにする」に変更
 
 **反映済み:** `git push`（GitHub Pages）完了。ローカル（`npx serve`）で、①メニューからの期切替確認ダイアログ表示、②集金グリッドでの受領確認ダイアログ（複数ヶ月分の一括表示）、③受領取消の確認ダイアログ、④部屋詳細モーダル内でのキャンセル時にモーダルへ正しく戻ること、を実際に操作して確認済み。
+
+### 技術的な小さな穴の修正・通知書/集金表・出金/収入登録の重複コード整理（2026-09-29）
+
+**経緯:** コードレビュー時に優先度を下げて見送っていた4件の指摘と、通知書/集金表・出金/収入登録の重複コードについて、ユーザーから対応依頼があった。
+
+**修正内容:**
+- `gas/コード.js` `createAccountingReport`: 支出側に「その他支出」の安全弁（`otherExpenseRows`/`otherExpenseTotal`）を追加。収入側の`otherIncomeTotal`と同じ考え方で、`[公共料金]`等のタグが編集で消えた場合でも集計から漏れないようにした。`index.html`の`loadReportPreview`・`submitCreateReport`（生成後サマリー）にも同様の表示行を追加
+- `gas/コード.js`: `createMergedPdf`（滞納通知書）・`createMergedArrearsPdf`（滞納者集金表）を`mergeDocumentsInFolder(folderPrefix, outputFileName)`という共通関数に統合。あわせて、以前は「実行中フラグ」をチェックするだけで自分では立てていなかった（連打すると同時実行されうる状態だった）不具合も解消（`finally`で確実に解除）。この統合により、`createMergedArrearsPdf`側だけ旧式（`DocumentApp.create()`+明示的ページサイズ設定+空段落除去）だったロジックも、より堅牢な新方式（1件目のドキュメントを複製してベースにする方式）に統一された
+- `gas/コード.js`: `cleanOldNotices`・`cleanOldArrearsSheets`を`cleanOldRunFolders(folderPrefix, keepCount)`に、`getMergedPdfStatus`・`getMergedArrearsPdfStatus`を`getMergedPdfStatusByName(fileName)`にそれぞれ統合
+- `gas/コード.js` `cleanOldBackups`: 他の削除処理と同様、`setTrashed`をtry/catchで保護（所有者が異なるバックアップファイルがあっても月次トリガーが止まらないように）
+- `index.html`: 出金登録・収入登録の実処理（登録・履歴表示・編集モーダル・削除）を`submitFinanceRecord`・`loadFinanceHistory(kind)`・`openEditFinanceModal(kind,...)`・`saveEditFinance(kind,...)`・`confirmDeleteFinance(kind,...)`・`doDeleteFinance(kind,...)`という共通関数に統合（`kind`は`'expense'`|`'income'`）。編集開始時点の値を保持する変数も`editExpenseOriginal`/`editIncomeOriginal`の2つから`editFinanceOriginal`1つに統一。副次的に、統合前は出金側だけ簡素だったエラーメッセージ（`e.message`が付いていなかった）も収入側と揃って詳細化された
+
+**反映済み:** GAS @95まで。`createMergedPdf`・`createMergedArrearsPdf`（アルゴリズム統一による回帰がないか特に重点的に確認：実データ25件で再生成しPDFのページ数・MediaBoxをバイト単位で確認、いずれも25ページ・A4サイズで問題なし）・`getMergedPdfStatus`系・`cleanOldNotices`系を実際に呼び出して動作確認済み。`git push`（GitHub Pages）完了。出金/収入登録は`npx serve`のローカル環境で実際に登録→履歴表示→編集モーダル→削除まで一通り操作して確認済み（テスト登録分は確認後に削除済み、本番データへの影響なし）。
+
+**引き継ぎ時の注意:** 今回対応しなかった「通知書/集金表の個別ドキュメント生成」（`createDelinquencyNotices`/`createArrearsPaymentSheets`）は、1部屋ごとの本文組み立てロジックが構造的にかなり異なる（前者はプレースホルダー置換、後者はテーブル生成）ため、共通化は見送った。無理に共通化すると抽象化が漏れやすく複雑になるおそれがあるため、優先度は低いままにしている。
 
 ### 環境面の注意（今後の作業について）
 
