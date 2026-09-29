@@ -1281,18 +1281,24 @@ function getRoomsByFloor(f) {
     .filter(r => Math.floor(r/100) === f && !SKIP_ROOMS.includes(r) && !isSpecialRoom(r));
 }
 function calcLongFlag(room, from, to) {
-  const invalidSet = getInvalidMonthSet(room);
+  const invalidSet = getInvalidMonthSet(room, to);
   return effectiveMonthCount(from, to, invalidSet) >= 10 ? 1 : 0;
 }
-// 指定部屋の無効月を YYYY/MM の Set にして返す（Toが空欄なら現在年月まで延長）
-function getInvalidMonthSet(room) {
+// 指定部屋の無効月を YYYY/MM の Set にして返す。
+// Toが空欄（現在も無効期間中）の場合、以前は常に「現在の年月」までしか延長しなかったが、
+// 呼び出し元が計算しようとしている期間の終端（throughYm、期切替時は新しい期の終わり）が
+// 未来の場合はそこまで延長しないと、まだ継続中のはずの無効期間の途中から通常の未払い月
+// としてカウントされ、本来対象外の世帯が長期滞納フラグになりうる（gas/コード.jsの
+// getInvalidMonthSetと同じ修正）
+function getInvalidMonthSet(room, throughYm) {
   const now = new Date();
   const nowYm = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
+  const fallbackYm = throughYm || nowYm;
   const set = new Set();
   invalidPeriods
     .filter(r => String(r.room) === String(room))
     .forEach(r => {
-      const to = r.to || nowYm;
+      const to = r.to || fallbackYm;
       let cur = r.from;
       while (ymToNum(cur) <= ymToNum(to)) {
         set.add(cur);
@@ -1359,6 +1365,8 @@ function receiveMonth(room, monthIdx) {
   updateStats();
   if (currentFloor !== null) renderRoomList(currentFloor);
   showToast(`${room}号室 〜${ym} 受領しました`);
+  lsSave();
+  persistPendingState();
 }
 
 function unreceiveMonth(room, monthIdx) {
@@ -1376,6 +1384,8 @@ function unreceiveMonth(room, monthIdx) {
   updateStats();
   if (currentFloor !== null) renderRoomList(currentFloor);
   showToast(`${room}号室 ${ym} 未払いに戻しました`);
+  lsSave();
+  persistPendingState();
 }
 
 function toggleMonth(room, monthIdx) {
@@ -1418,7 +1428,15 @@ async function doSwitchTerm(newTermEnd) {
     const nextStart = addMonths(newTermEnd, -5);
     Object.keys(unpaid).forEach(room => {
       const u = unpaid[room];
-      if (monthCount(u.from, u.to) < 1) unpaid[room].from = nextStart;
+      // monthCount(u.from, u.to) < 1 は「ちょうど払い済み」（from = 旧toの翌月）と
+      // 「前払いで旧期の終わりより先まで払い済み」（from が旧toよりさらに先）の
+      // 両方で成立してしまう。以前はどちらの場合もfromを新しい期の頭（nextStart）に
+      // 巻き戻していたため、前払い分の記録が消えて「未払い」扱いに戻ってしまっていた。
+      // fromを後退させることは絶対にせず、nextStartより先（＝前払い済み）ならそのまま
+      // 維持する
+      if (monthCount(u.from, u.to) < 1 && ymToNum(u.from) < ymToNum(nextStart)) {
+        unpaid[room].from = nextStart;
+      }
       unpaid[room].to = newTermEnd;
       unpaid[room].longFlag = calcLongFlag(room, unpaid[room].from, newTermEnd);
       pendingRooms.add(Number(room));
@@ -1580,6 +1598,34 @@ function lsLoad() {
   } catch(e) { return false; }
 }
 
+// 受領入力（pendingRooms/pendingLedger）の永続化。
+// 以前はreceiveMonth/unreceiveMonthでの変更がメモリ上のみで、同期ボタンを押すまで
+// IndexedDB/localStorageのどこにも保存されなかったため、同期前にタブがクラッシュ/
+// メモリ不足で再読み込みされると未同期の受領記録が警告なく消えていた
+const LS_KEY_PENDING_ROOMS = 'jk_pending_rooms';
+
+async function persistPendingState() {
+  try {
+    localStorage.setItem(LS_KEY_PENDING_ROOMS, JSON.stringify([...pendingRooms]));
+  } catch(e) { /* quota超えなど無視 */ }
+  try {
+    await dbClear('pending_ledger');
+    if (pendingLedger.length > 0) await dbPutAll('pending_ledger', pendingLedger);
+  } catch(e) { /* DB未初期化等は無視（次回操作時にまた保存を試みる） */ }
+}
+
+async function restorePendingQueue() {
+  try {
+    const saved = localStorage.getItem(LS_KEY_PENDING_ROOMS);
+    if (saved) JSON.parse(saved).forEach(r => pendingRooms.add(r));
+  } catch(e) { /* 無視 */ }
+  try {
+    const pl = await dbGetAll('pending_ledger');
+    if (pl && pl.length > 0) pendingLedger = pl;
+  } catch(e) { /* 無視 */ }
+  updateSyncBtn();
+}
+
 function lsCacheAge() {
   const ts = localStorage.getItem(LS_KEY_TS);
   if (!ts) return Infinity;
@@ -1593,6 +1639,8 @@ async function loadAll() {
   // キャッシュがあれば即座に表示（体感速度改善）
   const hasCached = lsLoad();
   if (hasCached) {
+    // 前回タブが閉じられる/クラッシュする前の未同期の受領入力を復元する
+    await restorePendingQueue();
     showLoadingView(false);
     initMenu();
     // キャッシュが古い（10分超）場合はバックグラウンドで更新
@@ -1633,10 +1681,15 @@ async function fetchFromGAS() {
   await dbPutAll('unpaid', Object.entries(unpaid).map(([room,v]) => ({ room:Number(room),...v })));
   await dbPutAll('invalid_periods', invalidPeriods);
   pendingRooms.clear();
+  try { localStorage.removeItem(LS_KEY_PENDING_ROOMS); } catch(e) { /* 無視 */ }
   updateSyncBtn();
 }
 
 async function refreshFromGASBackground() {
+  // 未同期データがある間は、手動の再取得ボタン（reloadData）と同様にサーバーの
+  // データで無警告に上書きしない。以前はここにガードがなく、10分ごとの自動更新が
+  // 未同期の受領記録を黙って消してしまうことがあった
+  if (pendingRooms.size > 0) return;
   try {
     await fetchFromGAS();
     // メニューを静かに更新（トーストなし）
@@ -1658,8 +1711,7 @@ async function loadFromLocal() {
     const ml = await dbGetAll('memos');
     memos = {};
     ml.forEach(m => { memos[m.room] = m.memo; });
-    const pl = await dbGetAll('pending_ledger');
-    pendingLedger = pl;
+    await restorePendingQueue();
     showLoadingView(false);
     initMenu();
   } catch(e) {
@@ -1718,6 +1770,7 @@ async function syncToGAS() {
   await dbClear('unpaid');
   await dbPutAll('unpaid', Object.entries(unpaid).map(([room,v]) => ({ room:Number(room),...v })));
   pendingRooms.clear();
+  try { localStorage.removeItem(LS_KEY_PENDING_ROOMS); } catch(e) { /* 無視 */ }
   updateSyncBtn();
 }
 
@@ -2324,8 +2377,21 @@ function monthToTerm(year, month) {
   return { year: year - 1, half: '後期' };
 }
 
+// HTML属性値（value="..."等）にそのまま埋め込む場合のエスケープ。escapeAttrは
+// onclick属性の中にさらにJS文字列リテラルとして埋め込む場合専用なので、ここでは使えない
+// （escapeAttrのバックスラッシュ/シングルクォートのエスケープを適用すると、逆に
+// 表示上おかしくなる）。編集モーダルのvalue="${item}"がダブルクォートを含む値で
+// 属性ごと途中終端し、保存時に入力値が黙って切り詰められる不具合があったため追加
+function escapeHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function escapeAttr(s) {
-  return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  // 出力先はダブルクォートで囲んだonclick="..."属性の中に、さらにシングルクォートで
+  // 囲んだJS文字列リテラルとして埋め込まれる。バックスラッシュ・シングルクォートの
+  // JSエスケープだけでは、値にダブルクォートが含まれる場合にHTML属性自体がそこで
+  // 終端してしまい表示が壊れるため、ダブルクォートもHTML実体参照にエスケープする
+  return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 
 function renderQuickItems() {
@@ -2360,7 +2426,11 @@ async function submitExpense() {
   btn.disabled = true;
   btn.textContent = '登録中...';
 
-  const t = TERMS[CURRENT_IDX];
+  // 常に「今の期」ではなく、実際に入力された日付が属する期に記録する。
+  // 期の切り替わり直後に前の期の日付で遡及入力すると、今の期にファイルされて
+  // 該当期の会計報告書・出金履歴のどちらにも出てこなくなる不具合があったため
+  const [dY, dM] = date.split('-').map(Number);
+  const t = monthToTerm(dY, dM);
   try {
     await gasPost({
       action: 'addFinance',
@@ -2409,14 +2479,19 @@ async function loadExpenseHistory() {
   }
 }
 
+// モーダルを開いた時点の元の値。保存/削除時にサーバー側へ送り、他端末が先に
+// 同じ行を変更/削除していた場合はrowIndexのズレで別の行を誤って上書きしないよう検出する
+let editExpenseOriginal = null;
+
 function openEditExpenseModal(rowIndex, item, amount, note) {
+  editExpenseOriginal = { item, amount };
   document.getElementById('modal-root').innerHTML = `
     <div class="overlay" onclick="if(event.target===this)closeModal()">
       <div class="modal">
         <div class="modal-title">出金記録を編集</div>
         <div class="form-group">
           <label class="form-label">項目</label>
-          <input type="text" class="form-input" id="edit-exp-item" value="${item}">
+          <input type="text" class="form-input" id="edit-exp-item" value="${escapeHtml(item)}">
         </div>
         <div class="form-group">
           <label class="form-label">金額（円）</label>
@@ -2424,7 +2499,7 @@ function openEditExpenseModal(rowIndex, item, amount, note) {
         </div>
         <div class="form-group">
           <label class="form-label">備考</label>
-          <input type="text" class="form-input" id="edit-exp-note" value="${note}">
+          <input type="text" class="form-input" id="edit-exp-note" value="${escapeHtml(note)}">
         </div>
         <button class="submit-btn" onclick="saveEditExpense(${rowIndex})" style="margin-bottom:8px;">保存する</button>
         <button class="invalid-action-btn delete" style="width:100%;padding:11px;margin-bottom:8px;" onclick="confirmDeleteExpense(${rowIndex})">削除する</button>
@@ -2439,8 +2514,10 @@ async function saveEditExpense(rowIndex) {
   const amount = Number(document.getElementById('edit-exp-amount').value);
   const note   = document.getElementById('edit-exp-note').value.trim();
   if (!item || !amount || amount <= 0) { showToast('項目・金額を確認してください'); return; }
+  const orig = editExpenseOriginal || {};
   try {
-    await gasPost({ action: 'updateFinanceRecord', rowIndex, item, amount, note });
+    const result = await gasPost({ action: 'updateFinanceRecord', rowIndex, item, amount, note, expectedItem: orig.item, expectedAmount: orig.amount });
+    if (!result.success) { showToast(result.error || '更新に失敗しました'); return; }
     showToast('✓ 更新しました');
     closeModal();
     loadExpenseHistory();
@@ -2465,8 +2542,10 @@ function confirmDeleteExpense(rowIndex) {
 
 async function doDeleteExpense(rowIndex) {
   if (!navigator.onLine) { showToast('オフライン中は削除できません'); return; }
+  const orig = editExpenseOriginal || {};
   try {
-    await gasPost({ action: 'deleteFinanceRecord', rowIndex });
+    const result = await gasPost({ action: 'deleteFinanceRecord', rowIndex, expectedItem: orig.item, expectedAmount: orig.amount });
+    if (!result.success) { showToast(result.error || '削除に失敗しました'); return; }
     showToast('✓ 削除しました');
     closeModal();
     loadExpenseHistory();
@@ -2537,7 +2616,9 @@ async function submitIncome() {
   btn.disabled = true;
   btn.textContent = '登録中...';
 
-  const t = TERMS[CURRENT_IDX];
+  // 常に「今の期」ではなく、実際に入力された日付が属する期に記録する（submitExpenseと同じ理由）
+  const [dY, dM] = date.split('-').map(Number);
+  const t = monthToTerm(dY, dM);
   try {
     await gasPost({
       action: 'addFinance',
@@ -2586,14 +2667,17 @@ async function loadIncomeHistory() {
   }
 }
 
+let editIncomeOriginal = null;
+
 function openEditIncomeModal(rowIndex, item, amount, note) {
+  editIncomeOriginal = { item, amount };
   document.getElementById('modal-root').innerHTML = `
     <div class="overlay" onclick="if(event.target===this)closeModal()">
       <div class="modal">
         <div class="modal-title">収入記録を編集</div>
         <div class="form-group">
           <label class="form-label">項目</label>
-          <input type="text" class="form-input" id="edit-inc-item" value="${item}">
+          <input type="text" class="form-input" id="edit-inc-item" value="${escapeHtml(item)}">
         </div>
         <div class="form-group">
           <label class="form-label">金額（円）</label>
@@ -2601,7 +2685,7 @@ function openEditIncomeModal(rowIndex, item, amount, note) {
         </div>
         <div class="form-group">
           <label class="form-label">備考</label>
-          <input type="text" class="form-input" id="edit-inc-note" value="${note}">
+          <input type="text" class="form-input" id="edit-inc-note" value="${escapeHtml(note)}">
         </div>
         <button class="submit-btn" onclick="saveEditIncome(${rowIndex})" style="margin-bottom:8px;">保存する</button>
         <button class="invalid-action-btn delete" style="width:100%;padding:11px;margin-bottom:8px;" onclick="confirmDeleteIncome(${rowIndex})">削除する</button>
@@ -2616,8 +2700,10 @@ async function saveEditIncome(rowIndex) {
   const amount = Number(document.getElementById('edit-inc-amount').value);
   const note   = document.getElementById('edit-inc-note').value.trim();
   if (!item || !amount || amount <= 0) { showToast('項目・金額を確認してください'); return; }
+  const orig = editIncomeOriginal || {};
   try {
-    await gasPost({ action: 'updateFinanceRecord', rowIndex, item, amount, note });
+    const result = await gasPost({ action: 'updateFinanceRecord', rowIndex, item, amount, note, expectedItem: orig.item, expectedAmount: orig.amount });
+    if (!result.success) { showToast(result.error || '更新に失敗しました'); return; }
     showToast('✓ 更新しました');
     closeModal();
     loadIncomeHistory();
@@ -2642,8 +2728,10 @@ function confirmDeleteIncome(rowIndex) {
 
 async function doDeleteIncome(rowIndex) {
   if (!navigator.onLine) { showToast('オフライン中は削除できません'); return; }
+  const orig = editIncomeOriginal || {};
   try {
-    await gasPost({ action: 'deleteFinanceRecord', rowIndex });
+    const result = await gasPost({ action: 'deleteFinanceRecord', rowIndex, expectedItem: orig.item, expectedAmount: orig.amount });
+    if (!result.success) { showToast(result.error || '削除に失敗しました'); return; }
     showToast('✓ 削除しました');
     closeModal();
     loadIncomeHistory();
@@ -2949,18 +3037,19 @@ async function loadReportPreview() {
       carryoverHint.textContent = '前期の記録が見つからないため手入力してください';
     }
 
-    const jichikai = records
-      .filter(r => r.type === '収入' && r.item.includes('自治会費'))
-      .reduce((s,r) => s + Number(r.amount), 0);
-    const hall = records
-      .filter(r => r.type === '収入' && r.item.includes('集会所'))
-      .reduce((s,r) => s + Number(r.amount), 0);
-    const arrears = records
-      .filter(r => r.type === '収入' && r.item.includes('滞納回収'))
-      .reduce((s,r) => s + Number(r.amount), 0);
-    const nextTerm = records
-      .filter(r => r.type === '収入' && r.item.includes('来期分'))
-      .reduce((s,r) => s + Number(r.amount), 0);
+    // 収支記録の生成本体（gas/コード.jsのcreateAccountingReport）と同じ優先順位チェーンで
+    // 分類する。以前はここに「その他収入」の受け皿がなく、いずれのキーワードにも
+    // 一致しない収入（新設の収入登録画面の「その他収入」区分など）がプレビューから
+    // 消えてしまい、実際に生成される会計報告書の金額と食い違っていた
+    let jichikai = 0, hall = 0, arrears = 0, nextTerm = 0, otherIncome = 0;
+    records.filter(r => r.type === '収入').forEach(r => {
+      const amt = Number(r.amount);
+      if      (r.item.includes('自治会費')) jichikai   += amt;
+      else if (r.item.includes('集会所'))   hall       += amt;
+      else if (r.item.includes('滞納回収')) arrears    += amt;
+      else if (r.item.includes('来期分'))   nextTerm   += amt;
+      else                                  otherIncome += amt;
+    });
     const utility = records
       .filter(r => r.type === '支出' && (r.item.includes('[公共料金]') || r.item.includes('[清掃費]')))
       .reduce((s,r) => s + Number(r.amount), 0);
@@ -2975,6 +3064,7 @@ async function loadReportPreview() {
         <div class="ledger-room-row"><span>集会所使用料</span><span>${fmtYen(hall)}</span></div>
         ${arrears > 0 ? `<div class="ledger-room-row"><span>滞納回収分</span><span>${fmtYen(arrears)}</span></div>` : ''}
         ${nextTerm > 0 ? `<div class="ledger-room-row"><span>来期分（前受金）</span><span>${fmtYen(nextTerm)}</span></div>` : ''}
+        ${otherIncome > 0 ? `<div class="ledger-room-row"><span>その他収入</span><span>${fmtYen(otherIncome)}</span></div>` : ''}
         <div style="font-weight:600;color:var(--red);margin:8px 0 4px;">支出（収支記録より）</div>
         <div class="ledger-room-row"><span>電気・水道・清掃代等</span><span>${fmtYen(utility)}</span></div>
         <div class="ledger-room-row"><span>その他（雑費等）</span><span>${fmtYen(misc)}</span></div>
