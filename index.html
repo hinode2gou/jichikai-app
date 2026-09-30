@@ -375,12 +375,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             <div class="menu-card-title">支払い整合性チェック</div>
             <div class="menu-card-sub">受領ログと支払い管理表のズレを診断</div>
           </div>
-          <div class="menu-card orange" onclick="confirmSwitchTerm()" style="grid-column:1/-1;">
-            <div style="display:flex;align-items:center;gap:12px;">
-              <div class="menu-card-icon">⏭️</div>
-              <div>
-                <div class="menu-card-title">期切替</div>
-                <div class="menu-card-sub">次の期に切り替える（年2回・要確認）</div>
+          <div style="grid-column:1/-1;display:flex;gap:12px;flex-wrap:wrap;">
+            <div class="menu-card orange" onclick="confirmSwitchTerm()" style="flex:1;min-width:240px;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div class="menu-card-icon">⏭️</div>
+                <div>
+                  <div class="menu-card-title">期切替</div>
+                  <div class="menu-card-sub">次の期に切り替える（年2回・要確認）</div>
+                </div>
+              </div>
+            </div>
+            <div class="menu-card purple" onclick="confirmUndoSwitchTerm()" style="flex:1;min-width:240px;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div class="menu-card-icon">↩️</div>
+                <div>
+                  <div class="menu-card-title">期切替を元に戻す</div>
+                  <div class="menu-card-sub">直前1期分の切替だけを取り消す</div>
+                </div>
               </div>
             </div>
           </div>
@@ -1480,6 +1491,15 @@ function confirmSwitchTerm() {
   const cur = TERMS[CURRENT_IDX];
   const next = TERMS[CURRENT_IDX + 1];
   if (!next) { showToast('次の期がありません'); return; }
+  // 現在日時（クリック時点の実際の今日）から見て2期以上先の期への切替は誤操作の
+  // 可能性が高いため中止する。CURRENT_IDXはページ読み込み時点の日付で固定されるため、
+  // タブを開きっぱなしにしたまま長期間操作しないと次の期の計算がズレることがある
+  // （最終的な安全弁はサーバー側のswitchTermにもあり、そちらが正の防御線）
+  const freshIdx = getCurrentTermIndex();
+  if ((CURRENT_IDX + 1) - freshIdx >= 2) {
+    showToast('現在日時から見て2期以上先の期への切替のため中止しました。画面を再読み込みしてください。');
+    return;
+  }
   document.getElementById('modal-root').innerHTML = `
     <div class="overlay">
       <div class="confirm-modal">
@@ -1503,6 +1523,15 @@ async function doSwitchTerm(newTermEnd) {
   closeModal();
   showToast('期を切り替え中...');
   try {
+    if (navigator.onLine) {
+      // switchTerm自体がサーバー側で誤操作チェック（2期以上先への切替拒否）を行うため、
+      // 成功を確認する前にローカルのunpaidを書き換えたりsyncToGASで上書きしたりしない
+      const result = await gasPost({ action: 'switchTerm', newTermEnd });
+      if (!result || result.success === false) {
+        showToast((result && result.error) || '切り替えに失敗しました');
+        return;
+      }
+    }
     const nextStart = addMonths(newTermEnd, -5);
     Object.keys(unpaid).forEach(room => {
       const u = unpaid[room];
@@ -1520,7 +1549,6 @@ async function doSwitchTerm(newTermEnd) {
       pendingRooms.add(Number(room));
     });
     if (navigator.onLine) {
-      await gasPost({ action: 'switchTerm', newTermEnd });
       await syncToGAS();
     }
     showToast(`期を ${newTermEnd} 末に切り替えました`);
@@ -1529,6 +1557,54 @@ async function doSwitchTerm(newTermEnd) {
     initMenu(); // 期切替をメニュー画面から実行しても、未払いバッジ等がすぐ最新化されるように
   } catch(e) {
     showToast('切り替えに失敗しました');
+  }
+}
+
+// ===================================================
+// 期切り替えを元に戻す（直前1期分のみ）
+// ===================================================
+function confirmUndoSwitchTerm() {
+  const cur  = TERMS[CURRENT_IDX];
+  const prev = TERMS[CURRENT_IDX - 1];
+  if (!prev) { showToast('戻せる前の期がありません'); return; }
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay">
+      <div class="confirm-modal">
+        <div class="confirm-title">期切替を元に戻しますか？</div>
+        <div class="confirm-body">
+          <b>${cur.year}年度${cur.half}</b> → <b>${prev.year}年度${prev.half}</b>に戻します<br><br>
+          ・全員のTo（期末）が <b>${prev.endYM}</b> に戻ります<br>
+          ・Fromは直前の期切替の直前の状態に復元されます<br>
+          ・直前1期分の切替だけを取り消せます（2期以上前には戻せません）<br>
+          ・この操作はスプレッドシートにも反映されます<br><br>
+          <span style="color:var(--red);font-size:12px;">※スプレッドシートへの接続が必要です</span>
+        </div>
+        <div class="confirm-actions">
+          <button class="confirm-btn cancel" onclick="closeModal()">キャンセル</button>
+          <button class="confirm-btn danger" onclick="doUndoSwitchTerm('${cur.endYM}')">元に戻す</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function doUndoSwitchTerm(expectedCurrentTermEnd) {
+  closeModal();
+  if (!navigator.onLine) { showToast('スプレッドシートへの接続が必要です'); return; }
+  showToast('元に戻しています...');
+  try {
+    const result = await gasPost({ action: 'undoSwitchTerm', expectedCurrentTermEnd });
+    if (!result || result.success === false) {
+      showToast((result && result.error) || '元に戻せませんでした');
+      return;
+    }
+    // 復元されたFrom/Toはサーバー側のロジックに従うため、ローカルで再現せずサーバーから再取得する
+    await fetchFromGAS();
+    showToast(`${result.revertedTo} 末に戻しました`);
+    updateStats();
+    renderAll();
+    initMenu();
+  } catch(e) {
+    showToast('元に戻す処理に失敗しました');
   }
 }
 
