@@ -1895,8 +1895,26 @@ async function doSync() {
     await syncToGAS();
     showToast('✓ スプレッドシートに同期しました');
   } catch(e) {
-    showToast('同期に失敗しました');
+    // 原因が分かるようにエラー内容も表示する（GAS側は成功していて端末側の保存だけ失敗した
+    // 場合などの切り分けに使う）
+    showToast(`同期に失敗しました（${e && e.message ? e.message : '不明なエラー'}）`);
     updateSyncBtn();
+  }
+}
+
+// サーバーへの送信が成功したあとの端末内（IndexedDB）への保存は、失敗しても同期自体は
+// 成功扱いにする。以前は保存の失敗（容量不足・DB未初期化など）が例外になり、サーバーには
+// 反映済みなのに「同期に失敗しました」と表示されて再同期を繰り返してしまっていた
+async function bestEffortLocalWrite(fn) {
+  try { await fn(); } catch(e) { /* 次回のデータ取得でサーバーの値に置き換わるため無視 */ }
+}
+
+// GASの応答が success:true でなければ失敗として扱う。以前は応答の中身を見ていなかったため、
+// サーバー側が「他の処理が実行中」等で処理を拒否しても成功扱いになり、送信済みとして
+// ローカルの受領ログが消えてしまうおそれがあった
+function assertGasSuccess(result, what) {
+  if (!result || result.success !== true) {
+    throw new Error((result && result.error) || `${what}がサーバーに受け付けられませんでした`);
   }
 }
 
@@ -1907,7 +1925,7 @@ async function syncToGAS() {
     to:       unpaid[room].to,
     longFlag: unpaid[room].longFlag
   }));
-  await gasPost({ action:'syncUnpaid', records });
+  assertGasSuccess(await gasPost({ action:'syncUnpaid', records }), '支払い状況の同期');
 
   // 受領ログを10件ずつ分割して送信（URL長制限対策）。
   // チャンクが成功するたびにpendingLedgerから随時取り除いて保存することで、
@@ -1916,14 +1934,18 @@ async function syncToGAS() {
   const chunkSize = 10;
   while (pendingLedger.length > 0) {
     const chunk = pendingLedger.slice(0, chunkSize);
-    await gasPost({ action:'addReceiptLogs', logs: chunk });
+    assertGasSuccess(await gasPost({ action:'addReceiptLogs', logs: chunk }), '受領ログの送信');
     pendingLedger = pendingLedger.slice(chunkSize);
-    await dbClear('pending_ledger');
-    if (pendingLedger.length > 0) await dbPutAll('pending_ledger', pendingLedger);
+    await bestEffortLocalWrite(async () => {
+      await dbClear('pending_ledger');
+      if (pendingLedger.length > 0) await dbPutAll('pending_ledger', pendingLedger);
+    });
   }
 
-  await dbClear('unpaid');
-  await dbPutAll('unpaid', Object.entries(unpaid).map(([room,v]) => ({ room:Number(room),...v })));
+  await bestEffortLocalWrite(async () => {
+    await dbClear('unpaid');
+    await dbPutAll('unpaid', Object.entries(unpaid).map(([room,v]) => ({ room:Number(room),...v })));
+  });
   pendingRooms.clear();
   try { localStorage.removeItem(LS_KEY_PENDING_ROOMS); } catch(e) { /* 無視 */ }
   updateSyncBtn();
