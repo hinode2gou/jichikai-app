@@ -1487,16 +1487,34 @@ function confirmToggleMonth(room, monthIdx, inModal) {
 // ===================================================
 // 期切り替え
 // ===================================================
+// 支払い管理表が今いる期（各部屋のToの最頻値が属する期）のTERMSインデックス。
+// 今日の日付から決まるCURRENT_IDXとは別物で、期が変わってから期切替を実行するまでの間は
+// CURRENT_IDXより1つ前になる。前払い済みの部屋はToが先に進んでいるため、最頻値を使う。
+// 判定できない場合（データなし）はnull
+function getDataTermIdx() {
+  const counts = {};
+  Object.values(unpaid).forEach(u => { if (u && u.to) counts[u.to] = (counts[u.to] || 0) + 1; });
+  let best = null;
+  Object.keys(counts).forEach(k => { if (best === null || counts[k] > counts[best]) best = k; });
+  if (!best) return null;
+  const [y, m] = best.split('/').map(Number);
+  const info = ymToTermInfo(y, m);
+  const idx = TERMS.findIndex(t => t.year === info.year && t.half === info.half);
+  return idx >= 0 ? idx : null;
+}
+
 function confirmSwitchTerm() {
-  const cur = TERMS[CURRENT_IDX];
-  const next = TERMS[CURRENT_IDX + 1];
+  // 切替元・切替先は今日の日付ではなく、支払い管理表の実際の期（Toの最頻値）から決める。
+  // 以前は今日の日付から決めていたため、10月に入ったが期切替がまだ（Toが前期のまま）の
+  // 状態で「後期→来年度前期」という、後期を飛ばす誤った切替先が表示されていた
+  const dataIdx = getDataTermIdx();
+  if (dataIdx === null) { showToast('現在の期を判定できません。データを再取得してください'); return; }
+  const cur = TERMS[dataIdx];
+  const next = TERMS[dataIdx + 1];
   if (!next) { showToast('次の期がありません'); return; }
-  // 現在日時（クリック時点の実際の今日）から見て2期以上先の期への切替は誤操作の
-  // 可能性が高いため中止する。CURRENT_IDXはページ読み込み時点の日付で固定されるため、
-  // タブを開きっぱなしにしたまま長期間操作しないと次の期の計算がズレることがある
-  // （最終的な安全弁はサーバー側のswitchTermにもあり、そちらが正の防御線）
-  const freshIdx = getCurrentTermIndex();
-  if ((CURRENT_IDX + 1) - freshIdx >= 2) {
+  // 今日（クリック時点の実際の日付）から見て2期以上先の期への切替は誤操作の可能性が
+  // 高いため中止する（最終的な安全弁はサーバー側のswitchTermにもある）
+  if ((dataIdx + 1) - getCurrentTermIndex() >= 2) {
     showToast('現在日時から見て2期以上先の期への切替のため中止しました。画面を再読み込みしてください。');
     return;
   }
@@ -1564,8 +1582,10 @@ async function doSwitchTerm(newTermEnd) {
 // 期切り替えを元に戻す（直前1期分のみ）
 // ===================================================
 function confirmUndoSwitchTerm() {
-  const cur  = TERMS[CURRENT_IDX];
-  const prev = TERMS[CURRENT_IDX - 1];
+  const dataIdx = getDataTermIdx();
+  if (dataIdx === null) { showToast('現在の期を判定できません。データを再取得してください'); return; }
+  const cur  = TERMS[dataIdx];
+  const prev = TERMS[dataIdx - 1];
   if (!prev) { showToast('戻せる前の期がありません'); return; }
   document.getElementById('modal-root').innerHTML = `
     <div class="overlay">
@@ -1973,8 +1993,12 @@ function renderTermBar() {
   const t   = viewTerm();
   const rel = termRelation(viewIdx);
   const badges = { current:'今期', past:'過去', future:'予定' };
+  // 期が変わったのに期切替をまだ実行していない（支払い管理表のToが前の期のまま）場合、
+  // 今期のマスが全て「対象外（–）」になり未払い0件に見えて紛らわしいため、理由を明示する
+  const dataIdx = getDataTermIdx();
+  const notSwitchedYet = dataIdx !== null && dataIdx < CURRENT_IDX;
   const hints  = {
-    current:'現在進行中',
+    current: notSwitchedYet ? '⚠ 期切替が未実施です（メニューの「期切替」から実行）' : '現在進行中',
     past:`${CURRENT_IDX - viewIdx}期前`,
     future:`${viewIdx - CURRENT_IDX}期先（前払い対応）`
   };
