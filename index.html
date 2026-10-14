@@ -3003,6 +3003,14 @@ function updatePinDots() {
   }
 }
 function checkPin() {
+  if (correctPassword === null) {
+    // 暗証番号をまだサーバーから取得できていない間（接続中、または接続失敗）は、
+    // 入力の正誤を判定せず、「違います」と誤表示しない
+    document.getElementById('pin-error').textContent = 'サーバーに接続中です。しばらくお待ちください';
+    pinCurrent = '';
+    updatePinDots();
+    return;
+  }
   if (pinCurrent === correctPassword) {
     document.getElementById('pin-screen').style.display = 'none';
     document.getElementById('main-app').style.display   = 'block';
@@ -4079,18 +4087,34 @@ window.addEventListener('offline', () => { document.getElementById('offline-bann
     return;
   }
 
-  try {
-    const data = await gasGet({ action: 'getPassword' });
-    correctPassword = data.password || '0000';
-    document.getElementById('pin-screen').style.display = 'flex';
-  } catch(e) {
-    // 通信エラーで暗証番号が取得できない場合、認証をスキップしてメイン画面に
-    // 入れてしまわないよう、ここではPIN画面を表示したままエラーを示す。
-    document.getElementById('pin-screen').style.display = 'flex';
-    document.getElementById('pin-error').textContent =
-      'サーバーに接続できませんでした。再読み込みしてください';
-  }
+  await loadPasswordForPinScreen();
 })();
+
+// 暗証番号の取得。GASは起動直後（しばらく使っていない後）の応答が遅いことがあり
+// （実測で初回11秒、以降3〜4秒）、テザリング回線のタブレットでは1回の通信が
+// 失敗することもあるため、失敗しても自動で数回やり直す。それでも失敗した場合は、
+// 認証をスキップしてメイン画面に入れてしまわないようPIN画面を表示したままエラーを示し、
+// 再読み込みしなくても押せる「再試行」ボタンを出す
+async function loadPasswordForPinScreen() {
+  const errEl = document.getElementById('pin-error');
+  const MAX_ATTEMPTS = 3;
+  document.getElementById('pin-screen').style.display = 'flex';
+  let lastError = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    errEl.textContent = attempt === 1 ? '' : `接続しています...（${attempt}/${MAX_ATTEMPTS}回目）`;
+    try {
+      const data = await gasGet({ action: 'getPassword' });
+      correctPassword = data.password || '0000';
+      errEl.innerHTML = '';
+      return;
+    } catch(e) {
+      lastError = e;
+      if (attempt < MAX_ATTEMPTS) await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+  errEl.innerHTML = `サーバーに接続できませんでした（${escapeHtml(lastError && lastError.message ? lastError.message : '不明なエラー')}）<br>` +
+    `<button onclick="loadPasswordForPinScreen()" style="margin-top:8px;padding:8px 18px;border-radius:8px;border:none;font-size:15px;font-weight:600;cursor:pointer;">再試行</button>`;
+}
 </script>
 </body>
 </html>
