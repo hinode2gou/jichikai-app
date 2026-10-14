@@ -472,6 +472,27 @@ GAS @61まで反映済み。25件を再生成し「滞納者集金表.pdf」も�
 
 **今後の課題:** 再試行しても繰り返し接続できない場合は、表示されるエラー内容（タイムアウトか通信エラーか）を確認し、タイムアウトなら`GAS_TIMEOUT_MS`を延ばす。
 
+### [重要] 認証の強化：暗証番号のサーバー側確認＋署名付きトークン（2026-10-14）
+
+**経緯:** 「PIN画面のURLを知られたら誰でもアクセスできるのでは」というユーザーの指摘を調べたところ、実態はそれ以上だった。GitHubリポジトリは**公開**で、`index.html`にGASのURLが載っており、そのGASのURL（`access: ANYONE_ANONYMOUS`）は**ログインなしで全APIを呼べた**。PINを返すAPI（`getPassword`）も無認証で、PIN画面は画面側で照合するだけの見せかけだった。氏名一覧・支払い状況・収支記録の読み取りだけでなく、書き込み系（`syncUnpaid`・`switchTerm`・収支の登録/削除など）も誰でも呼べる状態だった（実際にログインなしで`getPassword`/`getResidents`/`getFinance`が200で返ることを確認）。Basic認証は、GitHub Pagesが静的ホスティングで掛けられず、GASへの通信が`<script>`タグ（JSONP）でヘッダーを付けられないため使えない。GAS自体をGoogleアカウント限定にする案も、別サイトからのCookieがブラウザに遮断されて動かない。
+
+**仕組み（`gas/コード.js` / `index.html`）:**
+- `verifyPin(pin)`（公開API）: 暗証番号をサーバー側（`アプリ認証パスワード`シートA2）で照合し、合っていれば**署名付きトークン**（`有効期限(ms).HMAC-SHA256署名`、有効24時間）を返す。署名鍵はScript Properties（`AUTH_SECRET`、初回に自動生成）
+- `doGet`/`doPost`の入口の`authorize()`で、`verifyPin`以外の全APIにトークンを必須化。無い/不正/期限切れなら`{success:false, authRequired:true, error:'AUTH_REQUIRED'}`
+- **総当たり対策:** 連続5回間違えると**全端末が15分ロック**（`PIN_MAX_FAILS`/`PIN_LOCK_SECONDS`、CacheService）。間違えるたび0.5秒待たせ、判定はScriptLockで直列化（並列で大量に試されても数え漏れしない）。成功すると失敗回数はリセット
+- `getPassword`（PINを返すAPI）は**廃止**（`handleGet`から削除。関数本体は`verifyPin`が使うため残している）
+- 画面側: PIN入力時に`verifyPin`を呼び、成功したら`authToken`（メモリのみ。画面を開き直すたびにPIN入力が必要なのは従来どおり）を保持。`gasGet`/`gasPost`が全呼び出しに自動でトークンを付与し、`authRequired`応答ならPIN画面を再表示（`requireReauth`）。通信自体の失敗（`verifyPin`の応答が得られない場合）は自動で最大3回やり直す（GASは時々一瞬エラーを返すため）。以前この日に入れた`loadPasswordForPinScreen`・`correctPassword`は不要になり削除
+- 緊急時に元へ戻すスイッチ: `gas/コード.js`の`AUTH_ENFORCED`（`true`で強制）。`false`にして再デプロイすればトークン無しでも全APIが通る（画面側は新方式のままでも動く）
+
+**反映済み:** GAS @110（認証機能追加・未強制）→ GitHub Pages（画面）→ GAS @111（`AUTH_ENFORCED=true`・`getPassword`廃止）の順で段階的に展開。本番で、匿名・偽造トークン・期限切れ形式のトークンの全APIが`AUTH_REQUIRED`で拒否されること、有効なトークンでは`getResidents`/`getUnpaidList`が通ること、`verifyPin`の誤PINが`残り回数`付きで返ることを確認。画面側は通信をスタブ化してPIN画面の4パターン（誤り／ロック中／通信失敗→再試行で成功／全失敗）とトークン付与・認証切れ時のPIN再表示を確認済み。**実機（タブレット/Duet）で本物のPINを入れてのログインは未確認**（ユーザーに確認してもらう）。
+
+**残るリスク・注意:**
+- 4桁のPINは1万通りだが、5回/15分のロックで総当たりには数週間かかる。ただし攻撃者はロックを繰り返し発動させて**全員を締め出す**ことはできる（URLを知っていれば）。許容している
+- オフライン起動時はPINを求めず端末内のキャッシュで起動する（従来どおり）。端末を盗まれた場合はキャッシュの中身が見える
+- GitHubリポジトリは公開のまま（GitHub Pagesの無料枠のため）。`CLAUDE.md`にもスプレッドシートID・各テンプレートIDが載っているが、Googleアカウントの権限が無ければ開けない。住人の氏名等のデータはリポジトリに入っていない（`gas/`は未追跡）
+- **開発・確認時の注意:** これまでのcurl/ブラウザからのAPI確認は、今後はトークンが必要。`verifyPin`にPIN（ユーザーに確認）を渡してトークンを取得し、`token=...`を付けて呼ぶ。ローカルのUI確認用の「PIN画面を`display:none`にして`startApp()`」という近道は、画面は出てもAPIが`AUTH_REQUIRED`になるため、実データでは使えなくなった
+- 既に開いている古い画面（更新前のタブ）は、操作時に同期失敗等のエラーになる。再読み込みしてPINを入れ直せば復旧する
+
 ### 環境面の注意（今後の作業について）
 
 2026-09-26に、このPC上で直接動くClaude Codeへの引継ぎが完了。`clasp push`/`clasp deploy`ともこのPCから正常に動作することを確認済み（node/clasp本体の場所は上記「環境依存の定数」を参照）。本番データを書き換えるGAS関数（`fixReceiptLogTypes`等の一回限りの補正関数）は、Claude Codeからブラウザ経由で直接実行しようとすると安全装置でブロックされるため、Apps Scriptエディタでユーザー自身が実行する運用になっている。
