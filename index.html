@@ -475,6 +475,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
           <button onclick="reloadData()" style="width:100%;padding:14px;background:var(--gray-l);color:var(--text2);border:1px solid var(--gray-b);border-radius:var(--r);font-size:14px;font-weight:600;cursor:pointer;">
             🔄 スプレッドシートからデータを再取得
           </button>
+          <button onclick="confirmLogout()" style="width:100%;margin-top:10px;padding:14px;background:var(--white);color:var(--text2);border:1px solid var(--gray-b);border-radius:var(--r);font-size:14px;font-weight:600;cursor:pointer;">
+            🔒 ログアウト
+          </button>
         </div>
       </div>
     </div>
@@ -1718,6 +1721,26 @@ const GAS_TIMEOUT_MS_LONG = 180000;
 // 暗証番号の確認（サーバー側で行う）に成功したときにGASが発行する、署名付きの合言葉。
 // 以降のすべてのGAS呼び出しに付けて送る。画面を開き直すたびに暗証番号の入力が必要
 let authToken = null;
+
+// 再読み込みのたびに暗証番号を入れ直さなくて済むよう、ログイン後のトークンを端末（localStorage）に
+// 保存しておく。有効期間はサーバー側のトークンの期限（24時間）で、期限が切れた・サーバーに
+// 拒否された・ログアウトした場合は消す。暗証番号そのものは保存しない
+const LS_KEY_AUTH = 'jk_auth';
+function saveAuth(token, expiresAt) {
+  try { localStorage.setItem(LS_KEY_AUTH, JSON.stringify({ token, expiresAt })); } catch(e) { /* 保存できなくても動く */ }
+}
+function clearSavedAuth() {
+  try { localStorage.removeItem(LS_KEY_AUTH); } catch(e) { /* 無視 */ }
+}
+// 期限内の保存済みトークンを返す（無ければnull）
+function loadSavedAuth() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LS_KEY_AUTH) || 'null');
+    if (s && s.token && Number(s.expiresAt) > Date.now()) return s.token;
+  } catch(e) { /* 無視 */ }
+  clearSavedAuth();
+  return null;
+}
 
 // GASの応答が「認証が必要」だった場合（トークンの有効期限切れ・未取得）は、暗証番号の
 // 入力画面を出し直し、呼び出し元にはエラーとして返す
@@ -3060,6 +3083,7 @@ async function checkPin() {
     const res = await verifyPinWithRetry(pinCurrent);
     if (res && res.success && res.token) {
       authToken = res.token;
+      saveAuth(res.token, res.expiresAt);
       errEl.textContent = '';
       document.getElementById('pin-screen').style.display = 'none';
       if (!appStarted) {
@@ -3084,6 +3108,7 @@ async function checkPin() {
 // トークンの有効期限切れなどで認証が必要になった場合に、暗証番号の入力画面を出し直す
 function requireReauth() {
   authToken = null;
+  clearSavedAuth();
   pinCurrent = '';
   updatePinDots();
   document.getElementById('pin-error').textContent = '認証の有効期限が切れました。暗証番号を入力してください';
@@ -4148,9 +4173,78 @@ window.addEventListener('offline', () => { document.getElementById('offline-bann
     return;
   }
 
-  // オンラインのときは暗証番号の入力画面を表示する（暗証番号の確認はサーバー側で行う）
+  // 端末に期限内のトークンが保存されていて、サーバーにもまだ有効と認められれば、
+  // 暗証番号の入力を省略して起動する
+  if (await tryResumeSession()) {
+    appStarted = true;
+    document.getElementById('main-app').style.display = 'block';
+    startApp();
+    return;
+  }
+
+  // それ以外は暗証番号の入力画面を表示する（暗証番号の確認はサーバー側で行う）
   document.getElementById('pin-screen').style.display = 'flex';
 })();
+
+// 保存済みトークンでの復帰。サーバーが「認証が必要」と返した場合は、gasGet側が保存済みトークンを
+// 消してPIN画面を出す。通信自体が失敗した場合は、トークンは残したままPIN画面にフォールバック
+async function tryResumeSession() {
+  const saved = loadSavedAuth();
+  if (!saved) return false;
+  authToken = saved;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await gasGet({ action: 'ping' });
+      if (res && res.success) return true;
+      break;
+    } catch(e) {
+      if (!authToken) return false;                         // 認証切れ（requireReauth済み）
+      if (attempt < 2) await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+  authToken = null;
+  return false;
+}
+
+// ===================================================
+// ログアウト
+// ===================================================
+// 端末を他の人に渡すときなど、明示的にログアウトする。保存済みトークンと、端末に保存した
+// 住人データ等のキャッシュを消して画面を開き直す（次回はオンラインで暗証番号を入れて
+// ログインし、データを再取得する）。まだ同期していない入力がある間は、消えてしまうため止める
+function confirmLogout() {
+  if (pendingRooms.size > 0 || pendingLedger.length > 0) {
+    showToast('未同期の入力があります。先に同期してからログアウトしてください');
+    return;
+  }
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay">
+      <div class="confirm-modal">
+        <div class="confirm-title">ログアウトしますか？</div>
+        <div class="confirm-body">
+          ・次に使うときは暗証番号の入力が必要になります<br>
+          ・この端末に保存した住人データ等のキャッシュも消えます（次回ログイン時に再取得されます）
+        </div>
+        <div class="confirm-actions">
+          <button class="confirm-btn cancel" onclick="closeModal()">キャンセル</button>
+          <button class="confirm-btn danger" onclick="doLogout()">ログアウト</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function doLogout() {
+  closeModal();
+  authToken = null;
+  clearSavedAuth();
+  try {
+    [LS_KEY_RESIDENTS, LS_KEY_UNPAID, LS_KEY_INVALID, LS_KEY_TS].forEach(k => localStorage.removeItem(k));
+  } catch(e) { /* 無視 */ }
+  for (const store of ['residents', 'unpaid', 'invalid_periods', 'memos']) {
+    try { await dbClear(store); } catch(e) { /* 無視 */ }
+  }
+  location.reload();
+}
 </script>
 </body>
 </html>
