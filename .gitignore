@@ -1,0 +1,3 @@
+# 開発用の認証トークン（Gitに載せない）
+gas/.dev-token
+.dev-token
