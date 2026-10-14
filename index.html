@@ -1908,17 +1908,23 @@ async function loadAll() {
 }
 
 async function fetchFromGAS() {
-  const [resData, unpaidData, invalidData] = await Promise.all([
-    gasGet({ action:'getResidents' }),
-    gasGet({ action:'getUnpaidList' }),
-    gasGet({ action:'getInvalidPeriods' })
-  ]);
-  residents = resData.residents || [];
+  // 住人・支払い管理表・無効期間・督促メモを1回の呼び出しで取得する。以前は3回に分けて並列で
+  // 呼んでいたが、そのたびにGASの起動とスプレッドシートの読み込みが走り、実測で約14秒
+  // （1回にまとめると約5秒）かかっていた。ログアウト後など端末にキャッシュが無い状態の
+  // 初回表示が遅く感じられる原因だった
+  const data = await gasGet({ action:'getInitialData' });
+  if (!data || !Array.isArray(data.residents) || !Array.isArray(data.records)) {
+    throw new Error('データの形式が正しくありません');
+  }
+  residents = data.residents;
   unpaid = {};
-  (unpaidData.records || []).forEach(r => {
+  data.records.forEach(r => {
     unpaid[r.room] = { from: r.from, to: r.to, longFlag: r.longFlag };
   });
-  invalidPeriods = invalidData.records || [];
+  invalidPeriods = data.invalidPeriods || [];
+  // 督促メモはサーバーの値を優先する（他の端末で書いた・消したメモを反映するため）。
+  // サーバーにまだ行が無い部屋の、この端末だけにあるメモは残す
+  (data.memos || []).forEach(m => { memos[m.room] = m.memo; });
 
   lsSave();
   await dbClear('residents');
@@ -1927,6 +1933,8 @@ async function fetchFromGAS() {
   await dbPutAll('residents', residents);
   await dbPutAll('unpaid', Object.entries(unpaid).map(([room,v]) => ({ room:Number(room),...v })));
   await dbPutAll('invalid_periods', invalidPeriods);
+  await dbClear('memos');
+  await dbPutAll('memos', Object.entries(memos).map(([room, memo]) => ({ room: Number(room), memo })));
   pendingRooms.clear();
   try { localStorage.removeItem(LS_KEY_PENDING_ROOMS); } catch(e) { /* 無視 */ }
   updateSyncBtn();
