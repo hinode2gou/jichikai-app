@@ -377,6 +377,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             <div class="menu-card-title">支払い整合性チェック</div>
             <div class="menu-card-sub">受領ログと支払い管理表のズレを診断</div>
           </div>
+          <div class="menu-card blue" onclick="showScreen('backup')">
+            <div class="menu-card-icon">💾</div>
+            <div class="menu-card-title">バックアップ管理</div>
+            <div class="menu-card-sub">今すぐ作成・世代の確認と削除</div>
+          </div>
           <div style="grid-column:1/-1;display:flex;gap:12px;flex-wrap:wrap;">
             <div class="menu-card orange" onclick="confirmSwitchTerm()" style="flex:1;min-width:240px;">
               <div style="display:flex;align-items:center;gap:12px;">
@@ -947,6 +952,37 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       </div>
     </div>
 
+    <!-- バックアップ管理 -->
+    <div id="screen-backup" style="display:none;">
+      <div class="finance-section">
+        <h3>バックアップ管理</h3>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
+          スプレッドシート全体のバックアップを、毎月1日の午前3時に自動で作成しています。
+          ここからは、いつでも手動で作成できます（大きな操作の前など）。
+          世代は新しい順に数え、<b>直近4世代は削除できません</b>。5世代目以降は1件ずつ、
+          または「残す世代数」を指定して古いものを一括で削除できます
+          （削除したファイルはGoogleドライブのゴミ箱に入り、30日間は戻せます）。
+          作成のたびに、12世代を超えた古いものは自動で削除されます。
+        </p>
+        <button class="submit-btn" id="backup-create-btn" onclick="createBackupNowUi()">
+          💾 今すぐバックアップを作成する
+        </button>
+        <div id="backup-list" style="margin-top:16px;"></div>
+        <div id="backup-bulk" style="margin-top:16px;display:none;padding-top:14px;border-top:1px solid var(--gray-b);">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px;">古いバックアップを一括削除</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span style="font-size:13px;">新しい順に</span>
+            <select id="backup-keep" style="padding:8px;border:1px solid var(--gray-b);border-radius:8px;font-size:14px;">
+              <option value="4">4</option><option value="6">6</option><option value="8" selected>8</option>
+              <option value="10">10</option><option value="12">12</option>
+            </select>
+            <span style="font-size:13px;">世代を残して、それより古いものを削除</span>
+            <button class="invalid-action-btn delete" onclick="confirmDeleteOldBackups()">一括削除</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 支払い整合性チェック -->
     <div id="screen-reconcile" style="display:none;">
       <div class="finance-section">
@@ -1034,7 +1070,7 @@ let currentTab    = 'col';
 
 function showScreen(name, pushStack = true) {
   // 全画面非表示
-  ['menu','collection','residents','ledger','expense','income','coldoc','report','hallreceipt','householdreceipt','notice','arrears','invalid','routine','reconcile'].forEach(s => {
+  ['menu','collection','residents','ledger','expense','income','coldoc','report','hallreceipt','householdreceipt','notice','arrears','invalid','routine','reconcile','backup'].forEach(s => {
     document.getElementById('screen-' + s).style.display = 'none';
   });
   document.getElementById('screen-' + name).style.display = 'block';
@@ -1065,6 +1101,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'arrears')    initArrears();
   if (name === 'invalid')    initInvalidPeriods();
   if (name === 'reconcile') initReconcile();
+  if (name === 'backup')     initBackup();
   if (name === 'routine')    initRoutineExpense();
 }
 
@@ -1093,6 +1130,7 @@ function updateHeader(name) {
     arrears:    '滞納者集金表作成',
     invalid:    '無効期間管理',
     reconcile:  '支払い整合性チェック',
+    backup:     'バックアップ管理',
     routine:    '定例出金登録',
   };
   document.getElementById('header-title').textContent = titles[name] || '';
@@ -3983,6 +4021,134 @@ function renderReconciliationResult(data) {
     <div style="margin-top:10px;">${summary}</div>`;
 }
 
+// ===================================================
+// バックアップ管理
+// ===================================================
+let backupData = null;
+
+async function initBackup() {
+  const listEl = document.getElementById('backup-list');
+  document.getElementById('backup-bulk').style.display = 'none';
+  if (!navigator.onLine) {
+    listEl.innerHTML = '<div class="empty-state">オフライン中は利用できません</div>';
+    return;
+  }
+  listEl.innerHTML = '<div class="empty-state">読み込み中...</div>';
+  await refreshBackupList();
+}
+
+async function refreshBackupList() {
+  const listEl = document.getElementById('backup-list');
+  try {
+    const data = await gasGet({ action: 'listBackups' });
+    if (!data || !data.success) throw new Error((data && data.error) || '取得失敗');
+    backupData = data;
+    renderBackupList();
+  } catch(e) {
+    listEl.innerHTML = `<div style="font-size:13px;color:var(--red);">取得に失敗しました: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderBackupList() {
+  const listEl = document.getElementById('backup-list');
+  const d = backupData;
+  if (!d || d.backups.length === 0) {
+    listEl.innerHTML = '<div class="empty-state">バックアップがありません</div>';
+    document.getElementById('backup-bulk').style.display = 'none';
+    return;
+  }
+  listEl.innerHTML = d.backups.map(b => `
+    <div class="finance-history-item">
+      <div class="fh-left">
+        <div class="fh-item">${b.generation}世代目　${escapeHtml(b.createdAt)}</div>
+        <div style="font-size:12px;color:var(--text2);word-break:break-all;">
+          <a href="${escapeHtml(b.url)}" target="_blank" rel="noopener">${escapeHtml(b.name)}</a>
+        </div>
+      </div>
+      ${b.protected
+        ? '<span style="font-size:12px;color:var(--text2);white-space:nowrap;">🔒 保護中</span>'
+        : `<button class="invalid-action-btn delete" onclick="confirmDeleteBackup('${escapeAttr(b.id)}', '${escapeAttr(b.generation + '世代目 ' + b.createdAt)}')">削除</button>`}
+    </div>`).join('');
+  // 一括削除は、保護世代より古いものがある場合だけ表示する
+  document.getElementById('backup-bulk').style.display = d.backups.length > d.protectedCount ? 'block' : 'none';
+}
+
+async function createBackupNowUi() {
+  if (!navigator.onLine) { showToast('オフライン中は実行できません'); return; }
+  const btn = document.getElementById('backup-create-btn');
+  btn.disabled = true;
+  btn.textContent = '作成中...（十数秒かかります）';
+  try {
+    const result = await gasPost({ action: 'createBackupNow' }, GAS_TIMEOUT_MS_LONG);
+    if (!result.success) throw new Error(result.error || '作成失敗');
+    showToast('✓ バックアップを作成しました');
+    await refreshBackupList();
+  } catch(e) {
+    showToast('バックアップの作成に失敗しました（' + e.message + '）');
+    // タイムアウトでもサーバー側では完了していることがあるため、一覧を取り直して確認できるようにする
+    await refreshBackupList();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 今すぐバックアップを作成する';
+  }
+}
+
+function confirmDeleteBackup(id, label) {
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay">
+      <div class="confirm-modal">
+        <div class="confirm-title">バックアップを削除しますか？</div>
+        <div class="confirm-body">${escapeHtml(label)} のバックアップをゴミ箱に移します。<br>（Googleドライブのゴミ箱から30日以内なら戻せます）</div>
+        <div class="confirm-actions">
+          <button class="confirm-btn cancel" onclick="closeModal()">キャンセル</button>
+          <button class="confirm-btn danger" onclick="doDeleteBackup('${escapeAttr(id)}')">削除する</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function doDeleteBackup(id) {
+  closeModal();
+  try {
+    const result = await gasPost({ action: 'deleteBackup', id });
+    if (!result.success) throw new Error(result.error || '削除失敗');
+    showToast('✓ 削除しました');
+  } catch(e) {
+    showToast('削除できませんでした（' + e.message + '）');
+  }
+  await refreshBackupList();
+}
+
+function confirmDeleteOldBackups() {
+  const keep = Number(document.getElementById('backup-keep').value);
+  const total = backupData ? backupData.backups.length : 0;
+  const n = total - keep;
+  if (n <= 0) { showToast(`${keep}世代より古いバックアップはありません`); return; }
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay">
+      <div class="confirm-modal">
+        <div class="confirm-title">古いバックアップを一括削除しますか？</div>
+        <div class="confirm-body">新しい順に <b>${keep}世代</b> を残し、それより古い <b>${n}件</b> をゴミ箱に移します。<br>（Googleドライブのゴミ箱から30日以内なら戻せます）</div>
+        <div class="confirm-actions">
+          <button class="confirm-btn cancel" onclick="closeModal()">キャンセル</button>
+          <button class="confirm-btn danger" onclick="doDeleteOldBackups(${keep})">${n}件を削除する</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function doDeleteOldBackups(keep) {
+  closeModal();
+  try {
+    const result = await gasPost({ action: 'deleteOldBackups', keepCount: keep });
+    if (!result.success) throw new Error(result.error || '削除失敗');
+    showToast(`✓ ${result.deleted}件を削除しました` + (result.failed ? `（${result.failed}件は削除できませんでした）` : ''));
+  } catch(e) {
+    showToast('削除できませんでした（' + e.message + '）');
+  }
+  await refreshBackupList();
+}
+
 async function initInvalidPeriods() {
   renderInvalidPeriodsList(); // まずキャッシュを即座に表示
   if (navigator.onLine) {
@@ -4171,6 +4337,21 @@ async function doDeleteInvalidPeriod(room, from) {
 // 各種イベント
 // ===================================================
 document.getElementById('exp-type')?.addEventListener('change', renderQuickItems);
+
+// PIN画面が表示されている間は、キーボード（数字キー・テンキー）の入力とBackspaceも使える
+// ようにする（画面上のキーパッドと同じ処理を呼ぶ）
+document.addEventListener('keydown', (e) => {
+  const pinScreen = document.getElementById('pin-screen');
+  if (!pinScreen || getComputedStyle(pinScreen).display === 'none') return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (/^[0-9]$/.test(e.key)) {
+    pinInput(e.key);
+    e.preventDefault();
+  } else if (e.key === 'Backspace' || e.key === 'Delete') {
+    pinDelete();
+    e.preventDefault();
+  }
+});
 window.addEventListener('online',  () => { document.getElementById('offline-banner').style.display='none'; });
 window.addEventListener('offline', () => { document.getElementById('offline-banner').style.display='block'; });
 
