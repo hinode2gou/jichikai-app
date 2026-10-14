@@ -1714,11 +1714,28 @@ const GAS_TIMEOUT_MS = 30000; // GAS側の処理が遅いだけで実際は成�
 // 通知書・集金表・まとめPDFなど、件数分だけ時間がかかる重い処理用。
 // 実測（25件）: 通知書作成 約85秒、まとめPDF 約30秒。件数が増えても余裕を持たせる
 const GAS_TIMEOUT_MS_LONG = 180000;
+
+// 暗証番号の確認（サーバー側で行う）に成功したときにGASが発行する、署名付きの合言葉。
+// 以降のすべてのGAS呼び出しに付けて送る。画面を開き直すたびに暗証番号の入力が必要
+let authToken = null;
+
+// GASの応答が「認証が必要」だった場合（トークンの有効期限切れ・未取得）は、暗証番号の
+// 入力画面を出し直し、呼び出し元にはエラーとして返す
+function settleGasResponse(data, resolve, reject) {
+  if (data && data.authRequired) {
+    requireReauth();
+    reject(new Error('認証の有効期限が切れました。暗証番号を入力してから、もう一度操作してください'));
+    return;
+  }
+  resolve(data);
+}
+
 function gasGet(params) {
   return new Promise((resolve, reject) => {
     const callbackName = 'gasCallback_' + Date.now() + '_' + (gasCallSeq++);
     const script = document.createElement('script');
     const p = new URLSearchParams(params);
+    if (authToken) p.append('token', authToken);
     p.append('callback', callbackName);
     script.src = GAS_URL + '?' + p.toString();
     script.onerror = () => {
@@ -1729,7 +1746,7 @@ function gasGet(params) {
     window[callbackName] = (data) => {
       delete window[callbackName];
       document.body.removeChild(script);
-      resolve(data);
+      settleGasResponse(data, resolve, reject);
     };
     document.body.appendChild(script);
     setTimeout(() => {
@@ -1748,7 +1765,7 @@ async function gasPost(data, timeoutMs = GAS_TIMEOUT_MS) {
     const script = document.createElement('script');
     const p = new URLSearchParams();
     p.append('callback', callbackName);
-    p.append('postData', JSON.stringify(data));
+    p.append('postData', JSON.stringify(authToken ? { ...data, token: authToken } : data));
     script.src = GAS_URL + '?' + p.toString();
     script.onerror = () => {
       delete window[callbackName];
@@ -1758,7 +1775,7 @@ async function gasPost(data, timeoutMs = GAS_TIMEOUT_MS) {
     window[callbackName] = (data) => {
       delete window[callbackName];
       document.body.removeChild(script);
-      resolve(data);
+      settleGasResponse(data, resolve, reject);
     };
     document.body.appendChild(script);
     setTimeout(() => {
@@ -2983,16 +3000,21 @@ async function submitRoutineExpenses() {
 // ===================================================
 // PIN認証
 // ===================================================
-let correctPassword = null;
+// 暗証番号の確認はサーバー側で行う（画面側には正しい暗証番号を持たない）。以前は暗証番号を
+// 返すAPIを呼んで画面側で照合していたため、URLを知っていれば誰でも暗証番号を取得できた。
+// サーバー側で連続して間違えるとロックされる（GASのverifyPin）
 let pinCurrent = '';
+let pinVerifying = false;
+let appStarted = false;
 
 function pinInput(num) {
-  if (pinCurrent.length >= 4) return;
+  if (pinVerifying || pinCurrent.length >= 4) return;
   pinCurrent += num;
   updatePinDots();
   if (pinCurrent.length === 4) setTimeout(checkPin, 150);
 }
 function pinDelete() {
+  if (pinVerifying) return;
   pinCurrent = pinCurrent.slice(0, -1);
   updatePinDots();
   document.getElementById('pin-error').textContent = '';
@@ -3002,32 +3024,70 @@ function updatePinDots() {
     document.getElementById(`dot${i}`).classList.toggle('filled', i < pinCurrent.length);
   }
 }
-function checkPin() {
-  if (correctPassword === null) {
-    // 暗証番号をまだサーバーから取得できていない間（接続中、または接続失敗）は、
-    // 入力の正誤を判定せず、「違います」と誤表示しない
-    document.getElementById('pin-error').textContent = 'サーバーに接続中です。しばらくお待ちください';
+function shakePinDots() {
+  const dots = document.getElementById('pin-dots');
+  dots.style.transition = 'transform 0.05s';
+  let count = 0;
+  const shake = setInterval(() => {
+    dots.style.transform = count % 2 === 0 ? 'translateX(8px)' : 'translateX(-8px)';
+    count++;
+    if (count > 5) { clearInterval(shake); dots.style.transform = 'translateX(0)'; }
+  }, 60);
+}
+
+// GASは起動直後の応答が遅かったり、時々一瞬エラーを返したりするため、通信そのものが失敗した
+// 場合（暗証番号が違うという「応答」ではなく）に限り、数回やり直す
+async function verifyPinWithRetry(pin) {
+  const MAX_ATTEMPTS = 3;
+  let lastError = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      return await gasGet({ action: 'verifyPin', pin });
+    } catch(e) {
+      lastError = e;
+      if (attempt < MAX_ATTEMPTS) await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+  throw lastError;
+}
+
+async function checkPin() {
+  if (pinVerifying) return;
+  pinVerifying = true;
+  const errEl = document.getElementById('pin-error');
+  errEl.textContent = '確認中...';
+  try {
+    const res = await verifyPinWithRetry(pinCurrent);
+    if (res && res.success && res.token) {
+      authToken = res.token;
+      errEl.textContent = '';
+      document.getElementById('pin-screen').style.display = 'none';
+      if (!appStarted) {
+        appStarted = true;
+        document.getElementById('main-app').style.display = 'block';
+        startApp();
+      }
+      return;
+    }
+    const msg = (res && res.error) || '暗証番号が違います';
+    errEl.textContent = (res && res.remaining != null && !res.locked) ? `${msg}（あと${res.remaining}回でロック）` : msg;
+    shakePinDots();
+  } catch(e) {
+    errEl.textContent = `サーバーに接続できませんでした（${e && e.message ? e.message : '不明なエラー'}）。もう一度入力してください`;
+  } finally {
     pinCurrent = '';
     updatePinDots();
-    return;
+    pinVerifying = false;
   }
-  if (pinCurrent === correctPassword) {
-    document.getElementById('pin-screen').style.display = 'none';
-    document.getElementById('main-app').style.display   = 'block';
-    startApp();
-  } else {
-    document.getElementById('pin-error').textContent = '暗証番号が違います';
-    pinCurrent = '';
-    updatePinDots();
-    const dots = document.getElementById('pin-dots');
-    dots.style.transition = 'transform 0.05s';
-    let count = 0;
-    const shake = setInterval(() => {
-      dots.style.transform = count % 2 === 0 ? 'translateX(8px)' : 'translateX(-8px)';
-      count++;
-      if (count > 5) { clearInterval(shake); dots.style.transform = 'translateX(0)'; }
-    }, 60);
-  }
+}
+
+// トークンの有効期限切れなどで認証が必要になった場合に、暗証番号の入力画面を出し直す
+function requireReauth() {
+  authToken = null;
+  pinCurrent = '';
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '認証の有効期限が切れました。暗証番号を入力してください';
+  document.getElementById('pin-screen').style.display = 'flex';
 }
 
 async function startApp() {
@@ -4080,6 +4140,7 @@ window.addEventListener('offline', () => { document.getElementById('offline-bann
   await openDB();
 
   if (!navigator.onLine) {
+    appStarted = true;
     document.getElementById('main-app').style.display = 'block';
     document.getElementById('offline-banner').style.display = 'block';
     await loadFromLocal();
@@ -4087,34 +4148,9 @@ window.addEventListener('offline', () => { document.getElementById('offline-bann
     return;
   }
 
-  await loadPasswordForPinScreen();
-})();
-
-// 暗証番号の取得。GASは起動直後（しばらく使っていない後）の応答が遅いことがあり
-// （実測で初回11秒、以降3〜4秒）、テザリング回線のタブレットでは1回の通信が
-// 失敗することもあるため、失敗しても自動で数回やり直す。それでも失敗した場合は、
-// 認証をスキップしてメイン画面に入れてしまわないようPIN画面を表示したままエラーを示し、
-// 再読み込みしなくても押せる「再試行」ボタンを出す
-async function loadPasswordForPinScreen() {
-  const errEl = document.getElementById('pin-error');
-  const MAX_ATTEMPTS = 3;
+  // オンラインのときは暗証番号の入力画面を表示する（暗証番号の確認はサーバー側で行う）
   document.getElementById('pin-screen').style.display = 'flex';
-  let lastError = null;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    errEl.textContent = attempt === 1 ? '' : `接続しています...（${attempt}/${MAX_ATTEMPTS}回目）`;
-    try {
-      const data = await gasGet({ action: 'getPassword' });
-      correctPassword = data.password || '0000';
-      errEl.innerHTML = '';
-      return;
-    } catch(e) {
-      lastError = e;
-      if (attempt < MAX_ATTEMPTS) await new Promise(r => setTimeout(r, 1500));
-    }
-  }
-  errEl.innerHTML = `サーバーに接続できませんでした（${escapeHtml(lastError && lastError.message ? lastError.message : '不明なエラー')}）<br>` +
-    `<button onclick="loadPasswordForPinScreen()" style="margin-top:8px;padding:8px 18px;border-radius:8px;border:none;font-size:15px;font-weight:600;cursor:pointer;">再試行</button>`;
-}
+})();
 </script>
 </body>
 </html>
