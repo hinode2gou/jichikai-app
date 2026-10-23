@@ -1026,7 +1026,10 @@ function makeTerm(year, half) {
   return { year, half, months, startYM, endYM };
 }
 const TERMS = [];
-for (let y = 2023; y <= 2028; y++) {
+// 期の一覧の開始年度。滞納の開始月（From）がこれより前の部屋は、画面からその月を選べず受領登録
+// できなくなる。以前は2023年度からだったため、2021/12から滞納していた806号室などの支払いを
+// 登録できなかった。支払い管理表の最古のFromより十分前に取っておく
+for (let y = 2019; y <= 2028; y++) {
   TERMS.push(makeTerm(y,'前期'));
   TERMS.push(makeTerm(y,'後期'));
 }
