@@ -438,6 +438,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
               </div>
             </div>
           </div>
+          <div class="menu-card purple" onclick="showScreen('residentlist')" style="grid-column:1/-1;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div class="menu-card-icon">🏢</div>
+              <div>
+                <div class="menu-card-title">入居者一覧表作成</div>
+                <div class="menu-card-sub">住人情報から掲示用の一覧表（A3）を自動生成</div>
+              </div>
+            </div>
+          </div>
           <div class="menu-card orange" onclick="showScreen('notice')" style="grid-column:1/-1;">
             <div style="display:flex;align-items:center;gap:12px;">
               <div class="menu-card-icon">⚠️</div>
@@ -806,6 +815,42 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       </div>
     </div>
 
+    <!-- 入居者一覧表作成 -->
+    <div id="screen-residentlist" style="display:none;">
+      <div class="finance-section">
+        <h3>入居者一覧表作成</h3>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
+          住人情報（氏名）から、階ごと（11階〜1階）の入居者一覧表を自動生成します。PDFはA3横向きの印刷用です。生成後は「自動作成ドキュメント」フォルダに保存されます。<br>
+          氏名が空欄の部屋・氏名の先頭に✕が付いた部屋・継続中の無効期間に「退去」と書かれた部屋は、空欄で表示されます。
+        </p>
+
+        <!-- プレビュー -->
+        <div style="background:var(--gray-l);border-radius:var(--r);padding:12px;margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">🏢 いまの住人情報での内訳</div>
+          <div id="residentlist-preview"></div>
+        </div>
+
+        <button class="submit-btn" id="residentlist-submit-btn" onclick="submitCreateResidentList()">
+          🏢 入居者一覧表を生成する
+        </button>
+
+        <!-- 生成結果 -->
+        <div id="residentlist-result" style="display:none;margin-top:16px;padding:14px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);">
+          <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px;">✓ 入居者一覧表を生成しました</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="residentlist-result-path"></div>
+          <a id="residentlist-ss-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:6px;">
+            📊 Googleスプレッドシートを開く
+          </a>
+          <a id="residentlist-export-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;margin-bottom:6px;">
+            ⬇️ Excel(.xlsx)でダウンロード
+          </a>
+          <a id="residentlist-pdf-link" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--red);text-decoration:none;">
+            🖨️ PDFでダウンロード（A3横・印刷用）
+          </a>
+        </div>
+      </div>
+    </div>
+
     <!-- 集会所使用料領収書作成 -->
     <div id="screen-hallreceipt" style="display:none;">
       <div class="finance-section">
@@ -1073,7 +1118,7 @@ let currentTab    = 'col';
 
 function showScreen(name, pushStack = true) {
   // 全画面非表示
-  ['menu','collection','residents','ledger','expense','income','coldoc','report','hallreceipt','householdreceipt','notice','arrears','invalid','routine','reconcile','backup'].forEach(s => {
+  ['menu','collection','residents','ledger','expense','income','coldoc','report','hallreceipt','residentlist','householdreceipt','notice','arrears','invalid','routine','reconcile','backup'].forEach(s => {
     document.getElementById('screen-' + s).style.display = 'none';
   });
   document.getElementById('screen-' + name).style.display = 'block';
@@ -1099,6 +1144,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'coldoc')     initColDoc();
   if (name === 'report')     initReport();
   if (name === 'hallreceipt') initHallReceipt();
+  if (name === 'residentlist') initResidentList();
   if (name === 'householdreceipt') initHouseholdReceipt();
   if (name === 'notice')     initNotice();
   if (name === 'arrears')    initArrears();
@@ -1128,6 +1174,7 @@ function updateHeader(name) {
     coldoc:     '集金日程ドキュメント作成',
     report:     '会計報告書作成',
     hallreceipt: '集会所使用料領収書作成',
+    residentlist: '入居者一覧表作成',
     householdreceipt: '領収書作成（各世帯）',
     notice:     '滞納通知書作成',
     arrears:    '滞納者集金表作成',
@@ -3517,6 +3564,61 @@ async function submitCreateHallReceipts() {
   } finally {
     btn.disabled = false;
     btn.textContent = '🧾 領収書を生成する';
+  }
+}
+
+// ===================================================
+// 入居者一覧表作成（A3・掲示用）
+// ===================================================
+// 一覧表で空欄（空室扱い）になる部屋の判定は、gas/コード.js の createResidentList と同じルール
+function getResidentListBlankRooms() {
+  const movedOut = new Set(
+    invalidPeriods.filter(p => !p.to && String(p.reason || '').includes('退去')).map(p => String(p.room))
+  );
+  const blank = [];
+  let occupied = 0;
+  residents.forEach(r => {
+    const n = String(r.name || '').trim();
+    if (!n || /^[✕×✖]/.test(n) || movedOut.has(String(r.room))) blank.push(String(r.room));
+    else occupied++;
+  });
+  return { occupied, blank };
+}
+
+function initResidentList() {
+  const { occupied, blank } = getResidentListBlankRooms();
+  document.getElementById('residentlist-preview').innerHTML =
+    `<div class="coldoc-preview-row"><span>氏名を表示する部屋</span><span>${occupied}室</span></div>` +
+    `<div class="coldoc-preview-row"><span>空欄になる部屋</span><span>${blank.length}室</span></div>` +
+    (blank.length
+      ? `<div style="font-size:11px;color:var(--text3);margin-top:6px;">空欄: ${blank.sort((a, b) => a - b).join('、')}号室</div>`
+      : '');
+  document.getElementById('residentlist-result').style.display = 'none';
+}
+
+async function submitCreateResidentList() {
+  if (!navigator.onLine) { showToast('オフライン中は生成できません'); return; }
+  const btn = document.getElementById('residentlist-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '生成中... しばらくお待ちください';
+  document.getElementById('residentlist-result').style.display = 'none';
+
+  try {
+    const result = await gasPost({ action: 'createResidentList' });
+    if (!result.success) throw new Error(result.error || '生成失敗');
+
+    document.getElementById('residentlist-result').style.display = 'block';
+    document.getElementById('residentlist-result-path').textContent =
+      `保存先: ${result.folderPath}/${result.title}`;
+    document.getElementById('residentlist-ss-link').href = result.ssUrl;
+    document.getElementById('residentlist-export-link').href = result.exportUrl;
+    document.getElementById('residentlist-pdf-link').href = result.pdfUrl;
+    showToast('✓ 入居者一覧表を生成しました');
+  } catch(e) {
+    showToast('生成に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🏢 入居者一覧表を生成する';
   }
 }
 
