@@ -502,7 +502,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
     <div id="screen-collection" style="display:none;">
       <div class="term-bar">
         <button class="term-arrow" id="btn-prev" onclick="changeView(-1)">‹</button>
-        <div class="term-center">
+        <div class="term-center" onclick="openTermPicker()" style="cursor:pointer;">
           <div class="term-name" id="term-name"></div>
           <div class="term-hint" id="term-hint"></div>
         </div>
@@ -2179,7 +2179,7 @@ function renderTermBar() {
     future:`${viewIdx - CURRENT_IDX}期先（前払い対応）`
   };
   document.getElementById('term-name').innerHTML =
-    `${t.year}年度 ${t.half}<span class="term-badge ${rel}">${badges[rel]}</span>`;
+    `${t.year}年度 ${t.half}<span class="term-badge ${rel}">${badges[rel]}</span><span style="font-size:11px;color:var(--text3);margin-left:4px;">▾</span>`;
   document.getElementById('term-hint').textContent = hints[rel];
   document.getElementById('btn-prev').disabled = viewIdx === 0;
   document.getElementById('btn-next').disabled = viewIdx === TERMS.length - 1;
@@ -2370,8 +2370,11 @@ function switchTab(tab) {
   }
 }
 
-function changeView(d) {
-  const ni = viewIdx + d;
+function changeView(d) { setViewIdx(viewIdx + d); }
+
+// 表示する期を指定のインデックスにする（‹/›の1期ずつの移動と、期の選択画面からの
+// 直接移動の両方から使う）
+function setViewIdx(ni) {
   if (ni < 0 || ni >= TERMS.length) return;
   viewIdx = ni;
   // 期を切り替えても選択中のフロアは維持する。以前は毎回「全フロア」表示に
@@ -2390,6 +2393,59 @@ function changeView(d) {
   }
   updateFloorBar();
   renderAll();
+}
+
+// ===================================================
+// 期の選択（遠い期へ直接移動する）
+// ===================================================
+// 古い滞納の受領を登録するには、その月が含まれる期まで遡る必要があるが、‹を何度も押すのは
+// 手間（例: 2022年度まで8回）なので、期の名前をタップして直接移動できるようにする。
+// 「最も古い滞納の期へ」ボタンは、いま滞納がある部屋のうち最も古いFromの期へ移動する
+function findOldestUnpaid() {
+  let best = null;
+  Object.entries(unpaid).forEach(([room, u]) => {
+    const r = Number(room);
+    if (!u || SKIP_ROOMS.includes(r) || isSpecialRoom(r)) return;
+    if (ymToNum(u.from) > ymToNum(u.to)) return;           // 滞納なし（払い済み）
+    if (!best || ymToNum(u.from) < ymToNum(best.from)) best = { room: r, from: u.from };
+  });
+  if (!best) return null;
+  const [y, m] = best.from.split('/').map(Number);
+  const info = ymToTermInfo(y, m);
+  const idx = TERMS.findIndex(t => t.year === info.year && t.half === info.half);
+  return idx >= 0 ? { ...best, idx } : null;
+}
+
+function openTermPicker() {
+  const oldest = findOldestUnpaid();
+  const years = [...new Set(TERMS.map(t => t.year))].sort((a, b) => b - a);
+  const btn = (idx) => {
+    const t = TERMS[idx];
+    const isView = idx === viewIdx, isNow = idx === CURRENT_IDX;
+    const style = isView ? 'background:var(--blue2);color:var(--white);' : '';
+    return `<button class="confirm-btn cancel" style="flex:1;${style}" onclick="jumpToTerm(${idx})">${t.half}${isNow ? '（今期）' : ''}</button>`;
+  };
+  const rows = years.map(y => {
+    const f = TERMS.findIndex(t => t.year === y && t.half === '前期');
+    const l = TERMS.findIndex(t => t.year === y && t.half === '後期');
+    return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+      <span style="width:62px;font-size:13px;">${y}年度</span>${btn(f)}${btn(l)}</div>`;
+  }).join('');
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay" onclick="if(event.target===this)closeModal()">
+      <div class="confirm-modal" style="max-height:80vh;overflow:auto;">
+        <div class="confirm-title">表示する期を選ぶ</div>
+        ${oldest ? `<button class="confirm-btn ok" style="width:100%;margin-bottom:12px;" onclick="jumpToTerm(${oldest.idx})">
+          最も古い滞納の期へ（${oldest.room}号室　${ymLabel(oldest.from)}〜）</button>` : ''}
+        ${rows}
+        <div class="confirm-actions"><button class="confirm-btn cancel" onclick="closeModal()">閉じる</button></div>
+      </div>
+    </div>`;
+}
+
+function jumpToTerm(idx) {
+  closeModal();
+  setViewIdx(idx);
 }
 
 // ===================================================
