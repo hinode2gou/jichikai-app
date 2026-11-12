@@ -372,6 +372,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             <div class="menu-card-title">無効期間管理</div>
             <div class="menu-card-sub">入居前・入院等の集金対象外期間</div>
           </div>
+          <div class="menu-card green" onclick="showScreen('furikomi')">
+            <div class="menu-card-icon">🏦</div>
+            <div class="menu-card-title">振込消込</div>
+            <div class="menu-card-sub">振込世帯の入金を通帳と照合して消込</div>
+          </div>
           <div class="menu-card orange" onclick="showScreen('reconcile')">
             <div class="menu-card-icon">🔍</div>
             <div class="menu-card-title">支払い整合性チェック</div>
@@ -1028,6 +1033,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       </div>
     </div>
 
+    <!-- 振込消込 -->
+    <div id="screen-furikomi" style="display:none;">
+      <div class="term-bar">
+        <button class="term-arrow" id="fk-btn-prev" onclick="fkChangeTerm(-1)">‹</button>
+        <div class="term-center" onclick="fkOpenTermPicker()" style="cursor:pointer;">
+          <div class="term-name" id="fk-term-name"></div>
+          <div class="term-hint" id="fk-term-hint"></div>
+        </div>
+        <button class="term-arrow" id="fk-btn-next" onclick="fkChangeTerm(1)">›</button>
+      </div>
+      <div id="fk-summary" style="padding:10px 24px;font-size:13px;color:var(--text2);border-bottom:1px solid var(--gray-b);"></div>
+      <div id="fk-list"><div class="empty-state">読み込み中...</div></div>
+      <p style="padding:12px 24px;font-size:12px;color:var(--text3);line-height:1.6;">
+        通帳の入金を確認した月をタップして消込します（現金で受け取って貯金した分も同じ扱い）。
+        ここでの記録は収支記録・受領ログには反映されません。部屋番号をタップすると振込開始月を変更できます。
+      </p>
+    </div>
+
     <!-- 支払い整合性チェック -->
     <div id="screen-reconcile" style="display:none;">
       <div class="finance-section">
@@ -1118,7 +1141,7 @@ let currentTab    = 'col';
 
 function showScreen(name, pushStack = true) {
   // 全画面非表示
-  ['menu','collection','residents','ledger','expense','income','coldoc','report','hallreceipt','residentlist','householdreceipt','notice','arrears','invalid','routine','reconcile','backup'].forEach(s => {
+  ['menu','collection','residents','ledger','expense','income','coldoc','report','hallreceipt','residentlist','householdreceipt','notice','arrears','invalid','routine','reconcile','furikomi','backup'].forEach(s => {
     document.getElementById('screen-' + s).style.display = 'none';
   });
   document.getElementById('screen-' + name).style.display = 'block';
@@ -1150,6 +1173,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'arrears')    initArrears();
   if (name === 'invalid')    initInvalidPeriods();
   if (name === 'reconcile') initReconcile();
+  if (name === 'furikomi')   initFurikomi();
   if (name === 'backup')     initBackup();
   if (name === 'routine')    initRoutineExpense();
 }
@@ -1180,6 +1204,7 @@ function updateHeader(name) {
     arrears:    '滞納者集金表作成',
     invalid:    '無効期間管理',
     reconcile:  '支払い整合性チェック',
+    furikomi:   '振込消込',
     backup:     'バックアップ管理',
     routine:    '定例出金登録',
   };
@@ -4181,6 +4206,270 @@ function renderReconciliationResult(data) {
     </div>
     ${rows}
     <div style="margin-top:10px;">${summary}</div>`;
+}
+
+// ===================================================
+// 振込消込（★振込★の世帯の入金確認。通帳と照合して月ごとに消し込む）
+// ===================================================
+// 記録は振込消込記録シートにだけ持ち、収支記録・受領ログ・支払い管理表には触れない。
+// 現金で受け取って貯金した分も通帳側で管理するため、方法（振込/現金）は通帳の手書きと
+// 突き合わせるためのメモとして残すだけ。タップは楽観的に画面へ反映し、サーバーへの保存に
+// 失敗したら元に戻す
+let fkRooms = [];            // [{room, name, start}]
+let fkPaid  = new Map();     // `${room}|${ym}` -> '振込' | '現金'
+let fkIdx   = CURRENT_IDX;
+let fkLoaded = false;
+
+function fkTodayYm() {
+  const d = new Date();
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function fkTermIdxOfYm(ym) {
+  const [y, m] = ym.split('/').map(Number);
+  const info = ymToTermInfo(y, m);
+  return TERMS.findIndex(t => t.year === info.year && t.half === info.half);
+}
+function fkMinIdx() {
+  let min = CURRENT_IDX;
+  fkRooms.forEach(r => { const i = fkTermIdxOfYm(r.start); if (i >= 0 && i < min) min = i; });
+  return min;
+}
+function fkMaxIdx() { return Math.min(CURRENT_IDX + 1, TERMS.length - 1); }
+
+// 'before'=開始月より前（対象外） / 'paid' / 'unpaid'=今月までで未確認 / 'future'=来月以降で未確認
+function fkStatus(r, ym) {
+  if (ymToNum(ym) < ymToNum(r.start)) return 'before';
+  if (fkPaid.has(`${r.room}|${ym}`)) return 'paid';
+  return ymToNum(ym) <= ymToNum(fkTodayYm()) ? 'unpaid' : 'future';
+}
+// 開始月から今月までで未確認の月の一覧
+function fkOverdueMonths(r) {
+  const out = [];
+  const end = fkTodayYm();
+  for (let cur = r.start; ymToNum(cur) <= ymToNum(end); cur = addMonths(cur, 1)) {
+    if (!fkPaid.has(`${r.room}|${cur}`)) out.push(cur);
+  }
+  return out;
+}
+
+async function initFurikomi() {
+  fkIdx = Math.min(Math.max(CURRENT_IDX, 0), TERMS.length - 1);
+  const listEl = document.getElementById('fk-list');
+  document.getElementById('fk-summary').textContent = '';
+  if (!navigator.onLine) {
+    listEl.innerHTML = '<div class="empty-state">オフライン中は利用できません</div>';
+    return;
+  }
+  listEl.innerHTML = '<div class="empty-state">読み込み中...</div>';
+  try {
+    const data = await gasGet({ action: 'getFurikomiData' });
+    if (!data || data.success !== true) throw new Error((data && data.error) || 'データを取得できませんでした');
+    fkRooms = data.rooms;
+    fkPaid = new Map(data.records.map(x => [`${x.room}|${x.ym}`, x.method]));
+    fkLoaded = true;
+    fkRender();
+  } catch (e) {
+    fkLoaded = false;
+    listEl.innerHTML = `<div class="empty-state" style="color:var(--red);">読み込みに失敗しました（${escapeHtml(e.message)}）。メニューに戻ってもう一度開いてください</div>`;
+  }
+}
+
+function fkChangeTerm(d) {
+  const ni = fkIdx + d;
+  if (ni < fkMinIdx() || ni > fkMaxIdx()) return;
+  fkIdx = ni;
+  fkRender();
+}
+
+function fkRender() {
+  if (!fkLoaded) return;
+  const t = TERMS[fkIdx];
+  const rel = termRelation(fkIdx);
+  const badges = { current:'今期', past:'過去', future:'予定' };
+  document.getElementById('fk-term-name').innerHTML =
+    `${t.year}年度 ${t.half}<span class="term-badge ${rel}">${badges[rel]}</span><span style="font-size:11px;color:var(--text3);margin-left:4px;">▾</span>`;
+  document.getElementById('fk-term-hint').textContent = `振込世帯 ${fkRooms.length}室`;
+  document.getElementById('fk-btn-prev').disabled = fkIdx <= fkMinIdx();
+  document.getElementById('fk-btn-next').disabled = fkIdx >= fkMaxIdx();
+
+  // 開始月から今月までの全期間で未確認の月がある部屋（どの期を見ていても警告できるようにする）
+  const overdue = fkRooms.map(r => ({ r, months: fkOverdueMonths(r) })).filter(x => x.months.length > 0);
+  const total = overdue.reduce((s, x) => s + x.months.length, 0);
+  const sum = document.getElementById('fk-summary');
+  sum.innerHTML = overdue.length === 0
+    ? '<span style="color:var(--green);font-weight:700;">✓ 開始月から今月まで、すべて入金確認済みです</span>'
+    : `<span style="color:var(--red);font-weight:700;">未確認 ${overdue.length}室・${total}か月分</span>（開始月〜今月の全期間）`;
+
+  if (fkRooms.length === 0) {
+    document.getElementById('fk-list').innerHTML =
+      '<div class="empty-state">振込世帯がありません（住人情報の備考に★振込★がある部屋が対象です）</div>';
+    return;
+  }
+  let html = '';
+  fkRooms.forEach(r => {
+    const od = fkOverdueMonths(r).length;
+    html += `<div class="room-row">
+      <div class="room-info" onclick="fkEditStart(${r.room})" style="cursor:pointer;">
+        <div class="room-num">${r.room}</div>
+        <div class="room-name">${escapeHtml(r.name)}</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:1px;">${r.start.replace('/', '年')}月〜</div>
+      </div>
+      <div class="months-row">`;
+    t.months.forEach((m, i) => {
+      const ym = termMonthYM(t, i);
+      const st = fkStatus(r, ym);
+      const method = fkPaid.get(`${r.room}|${ym}`);
+      const icon = st === 'paid' ? (method === '現金' ? '現' : '✓') : st === 'unpaid' ? '✗' : '–';
+      const cls = st === 'before' ? 'invalid' : st;
+      html += `<div class="mc ${cls}" ${st === 'before' ? '' : `onclick="fkTapMonth(${r.room},'${ym}')"`}>
+        <div class="ml">${m}</div>
+        <div class="mi">${icon}</div>
+      </div>`;
+    });
+    html += `</div>`;
+    if (od > 0) html += `<div class="long-flag">未確認${od}</div>`;
+    html += `</div>`;
+  });
+  document.getElementById('fk-list').innerHTML = html;
+}
+
+function fkMonthsLabel(yms) {
+  if (yms.length <= 6) return yms.map(ymLabel).join('・');
+  return `${ymLabel(yms[0])}〜${ymLabel(yms[yms.length - 1])}（${yms.length}か月分）`;
+}
+
+function fkTapMonth(room, ym) {
+  const r = fkRooms.find(x => x.room === room);
+  if (!r) return;
+  const st = fkStatus(r, ym);
+  if (st === 'before') return;
+  const head = `<div class="confirm-title">${room}号室 ${escapeHtml(r.name)}</div>`;
+  if (st === 'paid') {
+    const method = fkPaid.get(`${room}|${ym}`) || '振込';
+    document.getElementById('modal-root').innerHTML = `
+      <div class="overlay"><div class="confirm-modal">${head}
+        <div class="confirm-body">${ymLabel(ym)}分（${method}で消込済み）の消込を取り消します。<br>よろしいですか？</div>
+        <div class="confirm-actions">
+          <button class="confirm-btn cancel" onclick="closeModal()">キャンセル</button>
+          <button class="confirm-btn danger" onclick="fkUnmark(${room},'${ym}')">取り消す</button>
+        </div></div></div>`;
+    return;
+  }
+  // 開始月からタップした月までの、まだ消込していない月
+  const through = [];
+  for (let cur = r.start; ymToNum(cur) <= ymToNum(ym); cur = addMonths(cur, 1)) {
+    if (!fkPaid.has(`${room}|${cur}`)) through.push(cur);
+  }
+  const multi = through.length > 1;
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay"><div class="confirm-modal">${head}
+      <div class="confirm-body">
+        ${multi ? `<b>${fkMonthsLabel(through)}</b>が未確認です。` : `<b>${ymLabel(ym)}分</b>を入金確認済みにします。`}
+        <div style="margin-top:10px;display:flex;gap:16px;">
+          <label><input type="radio" name="fk-method" value="振込" checked> 振込</label>
+          <label><input type="radio" name="fk-method" value="現金"> 現金（貯金済み）</label>
+        </div>
+      </div>
+      <div class="confirm-actions" style="flex-wrap:wrap;">
+        <button class="confirm-btn cancel" onclick="closeModal()">キャンセル</button>
+        ${multi ? `<button class="confirm-btn cancel" onclick="fkMark(${room},'${ym}','one')">${ymLabel(ym)}だけ</button>` : ''}
+        <button class="confirm-btn ok" onclick="fkMark(${room},'${ym}','${multi ? 'all' : 'one'}')">${multi ? `${through.length}か月分まとめて消込` : '消込する'}</button>
+      </div></div></div>`;
+}
+
+async function fkMark(room, ym, mode) {
+  const r = fkRooms.find(x => x.room === room);
+  if (!r) return;
+  const sel = document.querySelector('input[name="fk-method"]:checked');
+  const method = sel ? sel.value : '振込';
+  const yms = [];
+  if (mode === 'one') yms.push(ym);
+  else for (let cur = r.start; ymToNum(cur) <= ymToNum(ym); cur = addMonths(cur, 1)) {
+    if (!fkPaid.has(`${room}|${cur}`)) yms.push(cur);
+  }
+  closeModal();
+  yms.forEach(y => fkPaid.set(`${room}|${y}`, method));
+  fkRender();
+  try {
+    assertGasSuccess(await gasPost({ action: 'setFurikomiPaid', room, yms, method }), '消込の保存');
+    showToast(`${room}号室 ${fkMonthsLabel(yms)}を消込しました`);
+  } catch (e) {
+    yms.forEach(y => fkPaid.delete(`${room}|${y}`));
+    fkRender();
+    showToast('保存に失敗したため元に戻しました: ' + e.message);
+  }
+}
+
+async function fkUnmark(room, ym) {
+  const key = `${room}|${ym}`;
+  const old = fkPaid.get(key);
+  closeModal();
+  fkPaid.delete(key);
+  fkRender();
+  try {
+    assertGasSuccess(await gasPost({ action: 'unsetFurikomiPaid', room, yms: [ym] }), '取消の保存');
+    showToast(`${room}号室 ${ymLabel(ym)}の消込を取り消しました`);
+  } catch (e) {
+    if (old) fkPaid.set(key, old);
+    fkRender();
+    showToast('保存に失敗したため元に戻しました: ' + e.message);
+  }
+}
+
+function fkEditStart(room) {
+  const r = fkRooms.find(x => x.room === room);
+  if (!r) return;
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay"><div class="confirm-modal">
+      <div class="confirm-title">${room}号室 ${escapeHtml(r.name)}</div>
+      <div class="confirm-body">振込の開始月です。この月より前は対象外（–）になります。
+        <input type="month" id="fk-start-input" value="${r.start.replace('/', '-')}" style="display:block;margin-top:10px;width:100%;padding:10px;font-size:15px;border:1px solid var(--gray-b);border-radius:8px;">
+      </div>
+      <div class="confirm-actions">
+        <button class="confirm-btn cancel" onclick="closeModal()">キャンセル</button>
+        <button class="confirm-btn ok" onclick="fkSaveStart(${room})">保存</button>
+      </div></div></div>`;
+}
+
+async function fkSaveStart(room) {
+  const r = fkRooms.find(x => x.room === room);
+  const v = (document.getElementById('fk-start-input').value || '').trim();
+  if (!r || !/^\d{4}-\d{2}$/.test(v)) { showToast('年月を入力してください'); return; }
+  const start = v.replace('-', '/');
+  const old = r.start;
+  closeModal();
+  r.start = start;
+  fkRender();
+  try {
+    assertGasSuccess(await gasPost({ action: 'setFurikomiStart', room, start }), '開始月の保存');
+    showToast(`${room}号室の振込開始月を${ymLabel(start)}にしました`);
+  } catch (e) {
+    r.start = old;
+    fkRender();
+    showToast('保存に失敗したため元に戻しました: ' + e.message);
+  }
+}
+
+function fkOpenTermPicker() {
+  if (!fkLoaded) return;
+  const lo = fkMinIdx(), hi = fkMaxIdx();
+  const years = [...new Set(TERMS.slice(lo, hi + 1).map(t => t.year))].sort((a, b) => b - a);
+  const btn = (y, half) => {
+    const idx = TERMS.findIndex(t => t.year === y && t.half === half);
+    if (idx < lo || idx > hi) return '<span style="flex:1;"></span>';
+    const style = idx === fkIdx ? 'background:var(--blue2);color:var(--white);' : '';
+    return `<button class="confirm-btn cancel" style="flex:1;${style}" onclick="closeModal();fkIdx=${idx};fkRender();">${half}${idx === CURRENT_IDX ? '（今期）' : ''}</button>`;
+  };
+  const rows = years.map(y => `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+    <span style="width:62px;font-size:13px;">${y}年度</span>${btn(y, '前期')}${btn(y, '後期')}</div>`).join('');
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay" onclick="if(event.target===this)closeModal()">
+      <div class="confirm-modal" style="max-height:80vh;overflow:auto;">
+        <div class="confirm-title">表示する期を選ぶ</div>
+        ${rows}
+        <div class="confirm-actions"><button class="confirm-btn cancel" onclick="closeModal()">閉じる</button></div>
+      </div>
+    </div>`;
 }
 
 // ===================================================
