@@ -141,6 +141,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .mc .mi{font-size:16px;color:var(--text3);}
 .long-flag{font-size:12px;padding:3px 7px;border-radius:4px;background:var(--red-l);color:var(--red);border:1px solid var(--red-b);flex-shrink:0;white-space:nowrap;}
 
+/* スマホ幅（約480px以下）の振込消込。1行に部屋情報・バッジ・6ヶ月のマスを横並びにすると
+   マスが約24pxしか取れず横にもはみ出すため、1段目＝部屋番号・氏名・未確認バッジ、
+   2段目＝6ヶ月のマス（全幅）に組み替える。タブレット以上の幅の見た目は変えない */
+@media (max-width:480px){
+  #fk-list .room-row{flex-wrap:wrap;padding:10px 12px;gap:8px;}
+  #fk-list .room-info{order:1;flex:1 1 0;min-width:0;width:auto;display:flex;align-items:baseline;gap:8px;}
+  #fk-list .room-name{flex:0 1 auto;min-width:0;}
+  #fk-list .room-info > div:last-child{flex-shrink:0;margin-top:0 !important;white-space:nowrap;}
+  #fk-list .long-flag{order:2;}
+  #fk-list .months-row{order:3;flex:0 0 100%;}
+  #fk-list .mc{padding:12px 2px;}
+  #fk-list .mc .ml{font-size:12px;}
+  #fk-summary{padding:10px 12px !important;}
+}
+
 /* 未払いタブ */
 .unpaid-item{border:1px solid var(--red-b);border-radius:var(--r);padding:14px 20px;margin:10px 24px;background:var(--red-l);display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
 .unpaid-item.long{border-color:#991b1b;background:#fee2e2;}
