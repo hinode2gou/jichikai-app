@@ -4256,7 +4256,7 @@ function fkMaxIdx() { return Math.min(CURRENT_IDX + 1, TERMS.length - 1); }
 
 // 'before'=開始月より前（対象外） / 'paid' / 'unpaid'=今月までで未確認 /
 // 'open'=来月以降〜今期の末までで未確認（半期ごとにまとめて振り込まれるため、今期の最後まで
-//        消込できることが分かるよう、普通の色の「○」で出す） /
+//        消込できることが分かるよう、普通の色の「・」で出す） /
 // 'future'=今期の末より先で未確認（前払い。薄い灰色だが消込はできる）
 function fkStatus(r, ym) {
   if (ymToNum(ym) < ymToNum(r.start)) return 'before';
@@ -4341,7 +4341,7 @@ function fkRender() {
       const ym = termMonthYM(t, i);
       const st = fkStatus(r, ym);
       const method = fkPaid.get(`${r.room}|${ym}`);
-      const icon = st === 'paid' ? (method === '現金' ? '現' : '✓') : st === 'unpaid' ? '✗' : st === 'open' ? '○' : '–';
+      const icon = st === 'paid' ? (method === '現金' ? '現' : '✓') : st === 'unpaid' ? '✗' : st === 'open' ? '・' : '–';
       const cls = st === 'before' ? 'invalid' : st;
       html += `<div class="mc ${cls}" ${st === 'before' ? '' : `onclick="fkTapMonth(${r.room},'${ym}')"`}>
         <div class="ml">${m}</div>
