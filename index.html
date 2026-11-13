@@ -132,6 +132,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .mc.paid{background:var(--green-l);border-color:var(--green-b);}
 .mc.unpaid{background:var(--red-l);border-color:var(--red-b);}
 .mc.future{background:var(--gray-l);border-color:var(--gray-b);opacity:0.5;}
+.mc.open{background:var(--white);border-color:var(--blue-b);}
+.mc.open .ml,.mc.open .mi{color:var(--blue);}
 .mc.invalid{background:var(--gray-l);border-color:var(--gray-b);opacity:0.35;cursor:default;}
 .mc.invalid .ml,.mc.invalid .mi{color:var(--text3);}
 .mc .ml{font-size:13px;color:var(--text2);}
@@ -1062,6 +1064,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       <div id="fk-list"><div class="empty-state">読み込み中...</div></div>
       <p style="padding:12px 24px;font-size:12px;color:var(--text3);line-height:1.6;">
         通帳の入金を確認した月をタップして消込します（現金で受け取って貯金した分も同じ扱い）。
+        半期分まとめて振り込まれたときは、今期の最後の月（3月/9月）をタップすると、そこまでをまとめて消込できます。
         ここでの記録は収支記録・受領ログには反映されません。部屋番号をタップすると振込開始月を変更できます。
       </p>
     </div>
@@ -4251,11 +4254,15 @@ function fkMinIdx() {
 }
 function fkMaxIdx() { return Math.min(CURRENT_IDX + 1, TERMS.length - 1); }
 
-// 'before'=開始月より前（対象外） / 'paid' / 'unpaid'=今月までで未確認 / 'future'=来月以降で未確認
+// 'before'=開始月より前（対象外） / 'paid' / 'unpaid'=今月までで未確認 /
+// 'open'=来月以降〜今期の末までで未確認（半期ごとにまとめて振り込まれるため、今期の最後まで
+//        消込できることが分かるよう、普通の色の「○」で出す） /
+// 'future'=今期の末より先で未確認（前払い。薄い灰色だが消込はできる）
 function fkStatus(r, ym) {
   if (ymToNum(ym) < ymToNum(r.start)) return 'before';
   if (fkPaid.has(`${r.room}|${ym}`)) return 'paid';
-  return ymToNum(ym) <= ymToNum(fkTodayYm()) ? 'unpaid' : 'future';
+  if (ymToNum(ym) <= ymToNum(fkTodayYm())) return 'unpaid';
+  return ymToNum(ym) <= ymToNum(TERMS[CURRENT_IDX].endYM) ? 'open' : 'future';
 }
 // 開始月から今月までで未確認の月の一覧
 function fkOverdueMonths(r) {
@@ -4334,7 +4341,7 @@ function fkRender() {
       const ym = termMonthYM(t, i);
       const st = fkStatus(r, ym);
       const method = fkPaid.get(`${r.room}|${ym}`);
-      const icon = st === 'paid' ? (method === '現金' ? '現' : '✓') : st === 'unpaid' ? '✗' : '–';
+      const icon = st === 'paid' ? (method === '現金' ? '現' : '✓') : st === 'unpaid' ? '✗' : st === 'open' ? '○' : '–';
       const cls = st === 'before' ? 'invalid' : st;
       html += `<div class="mc ${cls}" ${st === 'before' ? '' : `onclick="fkTapMonth(${r.room},'${ym}')"`}>
         <div class="ml">${m}</div>
