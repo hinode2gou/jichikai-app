@@ -142,6 +142,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .mc.future .ml,.mc.future .mi{color:var(--text3);}
 .mc .mi{font-size:16px;color:var(--text3);}
 .long-flag{font-size:12px;padding:3px 7px;border-radius:4px;background:var(--red-l);color:var(--red);border:1px solid var(--red-b);flex-shrink:0;white-space:nowrap;}
+/* 部屋一覧の「長期」「振込」等のバッジは、右端に置くと有無で月のマスの幅・位置がずれるため、名前の下に出す */
+.room-info .long-flag{display:inline-block;margin-top:3px;font-size:11px;padding:1px 6px;}
+.term-block-label{font-size:12px;font-weight:600;color:var(--text2);margin:6px 0 4px;}
+.confirm-amount{font-size:22px;font-weight:700;color:var(--text);margin:8px 0 2px;}
+.confirm-amount-sub{font-size:12px;color:var(--text2);margin-bottom:8px;}
 
 /* スマホ幅（約480px以下）の振込消込。1行に部屋情報・バッジ・6ヶ月のマスを横並びにすると
    マスが約24pxしか取れず横にもはみ出すため、1段目＝部屋番号・氏名・未確認バッジ、
@@ -1444,9 +1449,11 @@ function hasUnpaid(room) {
   return t.months.some((_, i) => monthStatus(room, i) === 'unpaid');
 }
 function monthStatus(room, monthIdx) {
-  const t   = viewTerm();
-  const ym  = termMonthYM(t, monthIdx);
-  const invalidSet = getInvalidMonthSet(room);
+  return monthStatusYm(room, termMonthYM(viewTerm(), monthIdx));
+}
+// 年月（YYYY/MM）を直接指定して状態を返す（invalidSetは呼び出し側で計算済みなら渡して再計算を省く）
+function monthStatusYm(room, ym, invalidSetOpt) {
+  const invalidSet = invalidSetOpt || getInvalidMonthSet(room);
   if (invalidSet.has(ym)) return 'invalid';
   const u   = unpaid[room];
   if (!u) return 'future';
@@ -1530,8 +1537,9 @@ function effectiveMonthCount(from, to, invalidSet) {
 // 受領操作
 // ===================================================
 function receiveMonth(room, monthIdx) {
-  const t   = viewTerm();
-  const ym  = termMonthYM(t, monthIdx);
+  receiveMonthYm(room, termMonthYM(viewTerm(), monthIdx));
+}
+function receiveMonthYm(room, ym) {
   const u   = unpaid[room];
   if (!u) return;
   const ymN   = ymToNum(ym);
@@ -1577,8 +1585,9 @@ function receiveMonth(room, monthIdx) {
 }
 
 function unreceiveMonth(room, monthIdx) {
-  const t   = viewTerm();
-  const ym  = termMonthYM(t, monthIdx);
+  unreceiveMonthYm(room, termMonthYM(viewTerm(), monthIdx));
+}
+function unreceiveMonthYm(room, ym) {
   const u   = unpaid[room];
   if (!u) return;
   const ymN = ymToNum(ym);
@@ -1606,12 +1615,14 @@ function ymLabel(ym) {
 // inModal: 部屋詳細モーダル内のセルから呼ばれた場合はtrue（キャンセル/確定後に
 // モーダルを再表示する必要があるため、通常のグリッドからの呼び出しと分岐する）
 function confirmToggleMonth(room, monthIdx, inModal) {
-  const status = monthStatus(room, monthIdx);
+  confirmToggleMonthYm(room, termMonthYM(viewTerm(), monthIdx), inModal);
+}
+function confirmToggleMonthYm(room, ym, inModal) {
+  const status = monthStatusYm(room, ym);
   if (status === 'invalid') return;
-  const t  = viewTerm();
-  const ym = termMonthYM(t, monthIdx);
   const u  = unpaid[room];
   if (!u) return;
+  const invalidSet = getInvalidMonthSet(room);
   const name = getRoomName(room);
   const cancelAction = inModal ? `refreshModal(${room})` : 'closeModal()';
 
@@ -1630,17 +1641,23 @@ function confirmToggleMonth(room, monthIdx, inModal) {
   } else {
     return;
   }
-  const label = months.map(ymLabel).join('・');
+  // 無効月（入院中など集金しない月）は受領ログにも金額にも含まれないため、表示・合計からも除く
+  const billable = months.filter(m => !invalidSet.has(m));
+  const label = billable.map(ymLabel).join('・');
+  const total = billable.length * MONTHLY_FEE;
   const isCancel  = actionFn === 'unreceiveMonth';
   const okAction  = inModal
-    ? `${actionFn}(${room},${monthIdx});refreshModal(${room})`
-    : `${actionFn}(${room},${monthIdx});closeModal()`;
+    ? `${actionFn}Ym(${room},'${ym}');refreshModal(${room})`
+    : `${actionFn}Ym(${room},'${ym}');closeModal()`;
 
   document.getElementById('modal-root').innerHTML = `
     <div class="overlay">
       <div class="confirm-modal">
         <div class="confirm-title">${room}号室 ${name}</div>
-        <div class="confirm-body">${label}分を${isCancel ? '未払いに戻します' : '受領登録します'}。<br>よろしいですか？</div>
+        <div class="confirm-body">${label}分を${isCancel ? '未払いに戻します' : '受領登録します'}。
+          <div class="confirm-amount">合計 ¥${total.toLocaleString()}</div>
+          <div class="confirm-amount-sub">${billable.length}ヶ月 × ¥${MONTHLY_FEE.toLocaleString()}</div>
+          よろしいですか？</div>
         <div class="confirm-actions">
           <button class="confirm-btn cancel" onclick="${cancelAction}">キャンセル</button>
           <button class="confirm-btn ${isCancel ? 'danger' : 'ok'}" onclick="${okAction}">${isCancel ? '未払いにする' : '登録する'}</button>
@@ -2322,6 +2339,7 @@ function renderRoomList(f) {
         <div class="room-info">
           <div class="room-num">${r}</div>
           <div class="room-name">${getRoomName(r)}</div>
+          <div class="long-flag" style="background:var(--gray-l);color:var(--gray);border-color:var(--gray-b);">${special}</div>
         </div>
         <div class="months-row">`;
       t.months.forEach(m => {
@@ -2331,7 +2349,6 @@ function renderRoomList(f) {
         </div>`;
       });
       html += `</div>
-        <div class="long-flag" style="background:var(--gray-l);color:var(--gray);border-color:var(--gray-b);">${special}</div>
       </div>`;
       return;
     }
@@ -2341,6 +2358,7 @@ function renderRoomList(f) {
       <div class="room-info" onclick="openModal(${r})" style="cursor:pointer;">
         <div class="room-num">${r}</div>
         <div class="room-name">${getRoomName(r)}</div>
+        ${isLong ? `<div class="long-flag">長期</div>` : ''}
         ${memo ? `<div style="font-size:9px;color:var(--orange);margin-top:1px;">📝</div>` : ''}
       </div>
       <div class="months-row">`;
@@ -2352,9 +2370,7 @@ function renderRoomList(f) {
         <div class="mi">${icon}</div>
       </div>`;
     });
-    html += `</div>`;
-    if (isLong) html += `<div class="long-flag">長期</div>`;
-    html += `</div>`;
+    html += `</div></div>`;
   });
 
   document.getElementById('room-view').innerHTML = html || '<p style="padding:16px;color:var(--text2);">部屋なし</p>';
@@ -2573,15 +2589,38 @@ function openModal(room) {
   const amt  = mc * MONTHLY_FEE;
   const memo = memos[room] || '';
 
-  let monthsHtml = '<div class="modal-months">';
-  t.months.forEach((m,i) => {
-    const st = monthStatus(room, i);
-    const icon = st==='paid' ? '✓' : st==='unpaid' ? '✗' : st==='invalid' ? '／' : '–';
-    monthsHtml += `<div class="modal-mc ${st}" onclick="confirmToggleMonth(${room},${i},true)">
-      <div class="ml">${m}</div><div class="mi">${icon}</div>
-    </div>`;
+  // 表示する期: 滞納のある全期（滞納開始月を含む期〜未払い終了月を含む期）＋いま閲覧中の期。
+  // 以前は閲覧中の1期（6ヶ月）しか出ず、それより前の滞納月はタップして受領登録できなかった
+  const termIdxOfYm = ym => {
+    const [yy, mm] = ym.split('/').map(Number);
+    const info = ymToTermInfo(yy, mm);
+    return TERMS.findIndex(x => x.year === info.year && x.half === info.half);
+  };
+  const termIdxs = new Set([viewIdx]);
+  if (u.from && u.to && ymToNum(u.from) <= ymToNum(u.to)) {
+    const a = termIdxOfYm(u.from), b = termIdxOfYm(u.to);
+    // 滞納開始がカレンダーの範囲外（2019年度より前）の場合は、範囲内の最古の期から出す
+    for (let i = Math.max(a, 0); i <= b && i < TERMS.length; i++) termIdxs.add(i);
+  }
+  const sortedIdxs = [...termIdxs].sort((x, y) => x - y);
+  let monthsHtml = '';
+  sortedIdxs.forEach(ti => {
+    const tt = TERMS[ti];
+    // 複数期あるときだけ、どの期か分かる見出しを付ける
+    if (sortedIdxs.length > 1) {
+      monthsHtml += `<div class="term-block-label">${tt.year}年度 ${tt.half}</div>`;
+    }
+    monthsHtml += '<div class="modal-months">';
+    tt.months.forEach((m, i) => {
+      const ym = termMonthYM(tt, i);
+      const st = monthStatusYm(room, ym, invalidSetModal);
+      const icon = st==='paid' ? '✓' : st==='unpaid' ? '✗' : st==='invalid' ? '／' : '–';
+      monthsHtml += `<div class="modal-mc ${st}" onclick="confirmToggleMonthYm(${room},'${ym}',true)">
+        <div class="ml">${m}</div><div class="mi">${icon}</div>
+      </div>`;
+    });
+    monthsHtml += '</div>';
   });
-  monthsHtml += '</div>';
 
   const totalMc = Math.max(0, effectiveMonthCount(u.from, u.to, invalidSetModal));
   const infoHtml = `<div class="modal-info">
