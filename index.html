@@ -70,6 +70,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .menu-card.green{background:var(--green-l);border-color:var(--green-b);}
 .menu-card.orange{background:var(--orange-l);border-color:var(--orange-b);}
 .menu-card.purple{background:var(--purple-l);border-color:var(--purple-b);}
+.menu-card.red{background:var(--red-l);border-color:var(--red-b);}
+.menu-card.red .menu-card-title{color:var(--red);}
 .menu-card-icon{font-size:34px;}
 .menu-card-title{font-size:18px;font-weight:700;}
 .menu-card.blue .menu-card-title{color:var(--blue);}
@@ -144,6 +146,33 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .long-flag{font-size:12px;padding:3px 7px;border-radius:4px;background:var(--red-l);color:var(--red);border:1px solid var(--red-b);flex-shrink:0;white-space:nowrap;}
 /* 部屋一覧の「長期」「振込」等のバッジは、右端に置くと有無で月のマスの幅・位置がずれるため、名前の下に出す */
 .room-info .long-flag{display:inline-block;margin-top:3px;font-size:11px;padding:1px 6px;}
+/* 滞納者一覧（画面表示と印刷） */
+.al-opts{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;}
+.al-opts label{font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;}
+.al-opts select{padding:8px;border:1px solid var(--gray-b);border-radius:8px;font-size:14px;}
+.al-title{font-size:18px;font-weight:700;margin-bottom:2px;}
+.al-sub{font-size:12px;color:var(--text2);margin-bottom:10px;}
+.al-total{font-size:15px;font-weight:700;margin-bottom:10px;padding:10px 12px;background:var(--red-l);border:1px solid var(--red-b);border-radius:8px;color:var(--red);}
+.al-table{width:100%;border-collapse:collapse;font-size:14px;}
+.al-table th,.al-table td{border:1px solid var(--gray-b);padding:6px 8px;text-align:left;}
+.al-table th{background:var(--gray-l);font-size:12px;color:var(--text2);}
+.al-table td.num,.al-table th.num{text-align:right;white-space:nowrap;}
+.al-table tfoot td{font-weight:700;background:var(--gray-l);}
+@media print{
+  @page{size:A4 portrait;margin:12mm;}
+  body{background:#fff;}
+  .header,#offline-banner,#collection-banner,.no-print{display:none !important;}
+  .app{min-height:0;max-width:none;display:block;}
+  #screen-container{overflow:visible !important;}
+  .finance-section{padding:0;}
+  .al-table{font-size:12px;}
+  .al-table tr{page-break-inside:avoid;}
+  .al-table thead{display:table-header-group;}
+  .al-total{background:none;color:#000;border:1px solid #000;}
+  .al-table th,.al-table td{border-color:#000;}
+  .al-table th{background:#eee;color:#000;}
+  .al-table tfoot td{background:#eee;}
+}
 .term-block-label{font-size:12px;font-weight:600;color:var(--text2);margin:6px 0 4px;}
 .confirm-amount{font-size:22px;font-weight:700;color:var(--text);margin:8px 0 2px;}
 .confirm-amount-sub{font-size:12px;color:var(--text2);margin-bottom:8px;}
@@ -403,6 +432,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             <div class="menu-card-icon">🔍</div>
             <div class="menu-card-title">支払い整合性チェック</div>
             <div class="menu-card-sub">受領ログと支払い管理表のズレを診断</div>
+          </div>
+          <div class="menu-card red" onclick="showScreen('arrearslist')">
+            <div class="menu-card-icon">🧾</div>
+            <div class="menu-card-title">滞納者一覧</div>
+            <div class="menu-card-sub">滞納している部屋と残額の一覧・印刷</div>
           </div>
           <div class="menu-card blue" onclick="showScreen('backup')">
             <div class="menu-card-icon">💾</div>
@@ -1024,6 +1058,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       </div>
     </div>
 
+    <!-- 滞納者一覧（画面表示・印刷） -->
+    <div id="screen-arrearslist" style="display:none;">
+      <div class="finance-section">
+        <div class="al-opts no-print">
+          <label>残額の集計
+            <select id="al-basis" onchange="alSetBasis(this.value)">
+              <option value="now">今月分まで（いま払うべき額）</option>
+              <option value="term">今期の末まで</option>
+            </select>
+          </label>
+          <label>並び順
+            <select id="al-sort" onchange="alSetSort(this.value)">
+              <option value="room">部屋番号順</option>
+              <option value="amount">残額の多い順</option>
+            </select>
+          </label>
+        </div>
+        <button class="submit-btn no-print" style="margin-bottom:14px;" onclick="window.print()">🖨️ 印刷する</button>
+        <div id="al-body"></div>
+      </div>
+    </div>
+
     <!-- バックアップ管理 -->
     <div id="screen-backup" style="display:none;">
       <div class="finance-section">
@@ -1164,7 +1220,7 @@ let currentTab    = 'col';
 
 function showScreen(name, pushStack = true) {
   // 全画面非表示
-  ['menu','collection','residents','ledger','expense','income','coldoc','report','hallreceipt','residentlist','householdreceipt','notice','arrears','invalid','routine','reconcile','furikomi','backup'].forEach(s => {
+  ['menu','collection','residents','ledger','expense','income','coldoc','report','hallreceipt','residentlist','householdreceipt','notice','arrears','invalid','routine','reconcile','furikomi','arrearslist','backup'].forEach(s => {
     document.getElementById('screen-' + s).style.display = 'none';
   });
   document.getElementById('screen-' + name).style.display = 'block';
@@ -1197,6 +1253,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'invalid')    initInvalidPeriods();
   if (name === 'reconcile') initReconcile();
   if (name === 'furikomi')   initFurikomi();
+  if (name === 'arrearslist') initArrearsList();
   if (name === 'backup')     initBackup();
   if (name === 'routine')    initRoutineExpense();
 }
@@ -1228,6 +1285,7 @@ function updateHeader(name) {
     invalid:    '無効期間管理',
     reconcile:  '支払い整合性チェック',
     furikomi:   '振込消込',
+    arrearslist: '滞納者一覧',
     backup:     'バックアップ管理',
     routine:    '定例出金登録',
   };
@@ -4537,6 +4595,78 @@ function fkOpenTermPicker() {
 // バックアップ管理
 // ===================================================
 let backupData = null;
+
+// ===================================================
+// 滞納者一覧（画面表示・印刷）
+// ===================================================
+// 端末に読み込み済みの支払い管理表（unpaid）・無効期間から計算する（サーバー通信なし）。
+// 「滞納」＝支払い管理表のFromから基準月までの、無効期間を除いた月数 × 月額。
+// 基準は「今月分まで」（いま払うべき額）か「今期の末まで」（今期の残り月も含む）を選べる。
+// ★振込★/★その他★の部屋・氏名なし・先頭が✕（空室扱い）の部屋は含めない
+let alBasis = 'now';
+let alSort  = 'room';
+
+function initArrearsList() {
+  document.getElementById('al-basis').value = alBasis;
+  document.getElementById('al-sort').value  = alSort;
+  renderArrearsList();
+}
+function alSetBasis(v) { alBasis = v; renderArrearsList(); }
+function alSetSort(v)  { alSort  = v; renderArrearsList(); }
+
+function calcArrearsRows(basis) {
+  const now   = new Date();
+  const nowYm = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const rows  = [];
+  residents.forEach(r => {
+    const room = r.room;
+    if (SKIP_ROOMS.includes(room) || isSpecialRoom(room)) return;
+    const name = getRoomName(room);
+    if (!name || name.trim().startsWith('✕')) return;
+    const u = unpaid[room];
+    if (!u || !u.from || !u.to) return;
+    const through = basis === 'term' || ymToNum(u.to) < ymToNum(nowYm) ? u.to : nowYm;
+    if (ymToNum(u.from) > ymToNum(through)) return;
+    // 入院中などで終了日未設定の無効期間も、数える範囲の終わりまで延ばして除外する
+    const months = effectiveMonthCount(u.from, through, getInvalidMonthSet(room, through));
+    if (months <= 0) return;
+    rows.push({ room, name, from: u.from, months, amount: months * MONTHLY_FEE });
+  });
+  if (alSort === 'amount') rows.sort((a, b) => b.amount - a.amount || a.room - b.room);
+  else rows.sort((a, b) => a.room - b.room);
+  return rows;
+}
+
+function renderArrearsList() {
+  const el = document.getElementById('al-body');
+  const rows = calcArrearsRows(alBasis);
+  const now  = new Date();
+  const nowYm = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const termIdx = getDataTermIdx();
+  const termEnd = TERMS[termIdx !== null ? termIdx : CURRENT_IDX].endYM;
+  const basisLabel = alBasis === 'term'
+    ? `${ymLabel(termEnd)}分まで（今期の末まで）`
+    : `${ymLabel(nowYm)}分まで`;
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  const today = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+
+  let html = `<div class="al-title">滞納者一覧</div>
+    <div class="al-sub">${today}現在　集計: ${basisLabel}　月額 ¥${MONTHLY_FEE.toLocaleString()}</div>
+    <div class="al-total">滞納 ${rows.length}世帯　残額合計 ¥${total.toLocaleString()}</div>`;
+  if (rows.length === 0) {
+    html += '<div class="empty-state">滞納している部屋はありません 🎉</div>';
+  } else {
+    html += `<table class="al-table">
+      <thead><tr><th>部屋</th><th>氏名</th><th>滞納開始月</th><th class="num">月数</th><th class="num">残額</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td>${r.room}</td><td>${escapeHtml(r.name)}</td><td>${ymLabel(r.from)}〜</td>
+        <td class="num">${r.months}ヶ月</td><td class="num">¥${r.amount.toLocaleString()}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="3">合計（${rows.length}世帯）</td>
+        <td class="num">${rows.reduce((s, r) => s + r.months, 0)}ヶ月</td><td class="num">¥${total.toLocaleString()}</td></tr></tfoot>
+    </table>`;
+  }
+  el.innerHTML = html;
+}
 
 async function initBackup() {
   const listEl = document.getElementById('backup-list');
