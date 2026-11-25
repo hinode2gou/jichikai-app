@@ -1076,6 +1076,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
           </label>
         </div>
         <button class="submit-btn no-print" style="margin-bottom:14px;" onclick="window.print()">🖨️ 印刷する</button>
+        <div class="no-print" style="margin-bottom:14px;padding:12px;border:1px solid var(--gray-b);border-radius:var(--r);background:var(--gray-l);">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px;">📄 ファイルで作成（スプレッドシート／PDF）</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+            <select id="al-min-months" style="padding:8px;border:1px solid var(--gray-b);border-radius:8px;font-size:14px;">
+              <option value="3">3ヶ月以上</option>
+              <option value="6" selected>6ヶ月以上</option>
+              <option value="10">10ヶ月以上</option>
+              <option value="12">12ヶ月以上</option>
+            </select>
+            <span style="font-size:13px;color:var(--text2);">滞納している部屋（今月分までの集計）</span>
+          </div>
+          <button class="submit-btn" id="al-file-btn" onclick="submitCreateArrearsListFile()">📄 ファイルを作成する</button>
+          <div id="al-file-result" style="display:none;margin-top:12px;padding:12px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);">
+            <div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:4px;" id="al-file-summary"></div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="al-file-path"></div>
+            <a id="al-file-ss" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:6px;">📊 スプレッドシートで開く</a>
+            <a id="al-file-xlsx" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;margin-bottom:6px;">📥 Excelでダウンロード</a>
+            <a id="al-file-pdf" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--red);text-decoration:none;">🖨️ PDFでダウンロード（印刷用）</a>
+          </div>
+        </div>
         <div id="al-body"></div>
       </div>
     </div>
@@ -4611,6 +4631,42 @@ function initArrearsList() {
   document.getElementById('al-sort').value  = alSort;
   renderArrearsList();
 }
+// N ヶ月以上の滞納者を、スプレッドシート（＋Excel/PDFリンク）として作成する。
+// 集計はサーバー側の支払い管理表を元にするため、未同期の入力が端末にあれば先に同期が必要
+async function submitCreateArrearsListFile() {
+  if (!navigator.onLine) { showToast('オフライン中は作成できません'); return; }
+  if (pendingRooms.size > 0) {
+    showToast('未同期の入力があります。先に同期してから作成してください');
+    return;
+  }
+  const minMonths = Number(document.getElementById('al-min-months').value) || 6;
+  const btn = document.getElementById('al-file-btn');
+  btn.disabled = true;
+  btn.textContent = '作成中... しばらくお待ちください';
+  document.getElementById('al-file-result').style.display = 'none';
+  try {
+    const result = await gasPost({ action: 'createArrearsListSheet', minMonths }, GAS_TIMEOUT_MS_LONG);
+    if (!result.success) throw new Error(result.error || '作成失敗');
+    if (!result.count) {
+      showToast(`${minMonths}ヶ月以上の滞納者はいません`);
+      return;
+    }
+    document.getElementById('al-file-result').style.display = 'block';
+    document.getElementById('al-file-summary').textContent =
+      `${minMonths}ヶ月以上: ${result.count}世帯　残額合計 ¥${Number(result.total).toLocaleString()}`;
+    document.getElementById('al-file-path').textContent = `保存先: ${result.folderPath}/${result.title}`;
+    document.getElementById('al-file-ss').href   = result.ssUrl;
+    document.getElementById('al-file-xlsx').href = result.exportUrl;
+    document.getElementById('al-file-pdf').href  = result.pdfUrl;
+    showToast('✓ 滞納者一覧のファイルを作成しました');
+  } catch (e) {
+    showToast('作成に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📄 ファイルを作成する';
+  }
+}
+
 function alSetBasis(v) { alBasis = v; renderArrearsList(); }
 function alSetSort(v)  { alSort  = v; renderArrearsList(); }
 
