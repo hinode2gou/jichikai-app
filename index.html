@@ -1115,7 +1115,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
               <option value="10">10ヶ月以上</option>
               <option value="12">12ヶ月以上</option>
             </select>
-            <span style="font-size:13px;color:var(--text2);">滞納している部屋（今月分までの集計）</span>
+            <span style="font-size:13px;color:var(--text2);">滞納している部屋（上の「残額の集計」の基準で作成）</span>
           </div>
           <button class="submit-btn" id="al-file-btn" onclick="submitCreateArrearsListFile()">📄 ファイルを作成する</button>
           <div id="al-file-result" style="display:none;margin-top:12px;padding:12px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);">
@@ -4944,20 +4944,25 @@ async function submitCreateArrearsListFile() {
     return;
   }
   const minMonths = Number(document.getElementById('al-min-months').value) || 6;
+  const basis = alBasis; // 作成中に画面の選択を変えても、押した時点の基準で扱う
   const btn = document.getElementById('al-file-btn');
   btn.disabled = true;
   btn.textContent = '作成中... しばらくお待ちください';
   document.getElementById('al-file-result').style.display = 'none';
   try {
-    const result = await gasPost({ action: 'createArrearsListSheet', minMonths }, GAS_TIMEOUT_MS_LONG);
+    const result = await gasPost({ action: 'createArrearsListSheet', minMonths, basis }, GAS_TIMEOUT_MS_LONG);
     if (!result.success) throw new Error(result.error || '作成失敗');
+    // サーバー側が古いと基準が無視されて「今月分まで」で作られるため、違う内容を正しいものとして見せない
+    if ((result.basis || 'now') !== basis) {
+      throw new Error('サーバーが選んだ基準に対応していません。作られたファイルは使わないでください');
+    }
     if (!result.count) {
       showToast(`${minMonths}ヶ月以上の滞納者はいません`);
       return;
     }
     document.getElementById('al-file-result').style.display = 'block';
     document.getElementById('al-file-summary').textContent =
-      `${minMonths}ヶ月以上: ${result.count}世帯　残額合計 ¥${Number(result.total).toLocaleString()}`;
+      `${minMonths}ヶ月以上（${ymLabel(result.throughYm)}分まで）: ${result.count}世帯　残額合計 ¥${Number(result.total).toLocaleString()}`;
     document.getElementById('al-file-path').textContent = `保存先: ${result.folderPath}/${result.title}`;
     document.getElementById('al-file-ss').href   = result.ssUrl;
     document.getElementById('al-file-xlsx').href = result.exportUrl;
@@ -4971,7 +4976,12 @@ async function submitCreateArrearsListFile() {
   }
 }
 
-function alSetBasis(v) { alBasis = v; renderArrearsList(); }
+function alSetBasis(v) {
+  alBasis = v;
+  // 前の基準で作ったファイルのリンクが、今の画面の内容に見えないように隠す
+  document.getElementById('al-file-result').style.display = 'none';
+  renderArrearsList();
+}
 function alSetSort(v)  { alSort  = v; renderArrearsList(); }
 
 function calcArrearsRows(basis) {
