@@ -173,6 +173,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
   .al-table th{background:#eee;color:#000;}
   .al-table tfoot td{background:#eee;}
 }
+.from-edit-btn{display:block;width:100%;margin-top:8px;padding:9px;background:var(--white);border:1px solid var(--gray-b);border-radius:8px;font-size:13px;color:var(--blue);cursor:pointer;}
+.from-edit-field{display:block;width:100%;margin:8px 0;padding:10px;border:1px solid var(--gray-b);border-radius:8px;font-size:15px;color:var(--text);}
 .term-block-label{font-size:12px;font-weight:600;color:var(--text2);margin:6px 0 4px;}
 .confirm-amount{font-size:22px;font-weight:700;color:var(--text);margin:8px 0 2px;}
 .confirm-amount-sub{font-size:12px;color:var(--text2);margin-bottom:8px;}
@@ -2705,6 +2707,7 @@ function openModal(room) {
     累計未払い期間: <b>${hasUnpaid(room) ? u.from + ' 〜 ' + u.to : 'なし'}</b><br>
     累計未払い月数: <b>${totalMc}ヶ月</b>　今期未払い: <b>${mc}ヶ月 / ¥${amt.toLocaleString()}</b>
     ${u.longFlag===1 ? '<br><span style="color:var(--red);font-size:12px;">⚠ 長期未払い（10ヶ月以上）</span>' : ''}
+    ${u.from ? `<button class="from-edit-btn" onclick="openFromEdit(${room})">✏️ 滞納開始月を修正（お金は記録しない）</button>` : ''}
   </div>`;
 
   document.getElementById('modal-root').innerHTML = `
@@ -2745,6 +2748,115 @@ function refreshModal(room) {
   updateStats();
 }
 function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
+
+// ===================================================
+// 滞納開始月の修正（お金の記録を残さない）
+// ===================================================
+// アプリの外で支払い済みの月がある、入居月が違う、などで支払い管理表のFromが実際とずれている
+// ときに、Fromだけを直す。受領ログ・収支記録は作らない（月のマスをタップすると、Fromから
+// その月までが全部受領として記録されてしまうため、受け取る前にここで直す）。
+// 反映は通常の受領と同じく「同期」で行い、経緯は督促メモに残す
+let fromEdit = null; // { room, newFrom, reason }
+
+function openFromEdit(room) {
+  const u = unpaid[room];
+  if (!u) return;
+  // 未同期の受領がある状態で開始月を動かすと、受領ログの内容と食い違うため止める
+  if (pendingLedger.some(l => String(l.room) === String(room))) {
+    showToast('この部屋に未同期の受領があります。先に同期するか、受領を取り消してください');
+    return;
+  }
+  const minYm = TERMS[0].startYM;
+  const afterTo = addMonths(u.to, 1); // 今の期の末まで支払い済み、が選べる上限
+  const maxYm = ymToNum(u.from) > ymToNum(afterTo) ? u.from : afterTo;
+  const toInput = ym => ym.replace('/', '-');
+  fromEdit = { room, minYm, maxYm };
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay">
+      <div class="confirm-modal">
+        <div class="confirm-title">${room}号室 滞納開始月の修正</div>
+        <div class="confirm-body">
+          今の滞納開始月: <b>${ymLabel(u.from)}</b><br>
+          正しい滞納開始月（まだ支払われていない最初の月）を選んでください。
+          <input type="month" id="from-edit-input" class="from-edit-field" value="${toInput(u.from)}" min="${toInput(minYm)}" max="${toInput(maxYm)}">
+          <input type="text" id="from-edit-reason" class="from-edit-field" placeholder="理由（任意）例: 4月まで支払い済み">
+          <span style="font-size:12px;">受領ログ・収支記録は作りません。</span>
+        </div>
+        <div class="confirm-actions">
+          <button class="confirm-btn cancel" onclick="refreshModal(${room})">キャンセル</button>
+          <button class="confirm-btn ok" onclick="confirmFromEdit()">次へ</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function confirmFromEdit() {
+  const { room, minYm, maxYm } = fromEdit;
+  const u = unpaid[room];
+  const v = document.getElementById('from-edit-input').value; // 'YYYY-MM'
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(v)) { showToast('月を選んでください'); return; }
+  const newFrom = v.replace('-', '/');
+  if (newFrom === u.from) { showToast('今の滞納開始月と同じです'); return; }
+  if (ymToNum(newFrom) < ymToNum(minYm) || ymToNum(newFrom) > ymToNum(maxYm)) {
+    showToast(`${ymLabel(minYm)}〜${ymLabel(maxYm)}の範囲で選んでください`);
+    return;
+  }
+  fromEdit.newFrom = newFrom;
+  fromEdit.reason = document.getElementById('from-edit-reason').value.trim();
+
+  const later = ymToNum(newFrom) > ymToNum(u.from);
+  const first = later ? u.from : newFrom;
+  const last  = addMonths(later ? newFrom : u.from, -1);
+  const count = effectiveMonthCount(first, last, getInvalidMonthSet(room, last));
+  const range = first === last ? ymLabel(first) : `${ymLabel(first)}〜${ymLabel(last)}`;
+  document.getElementById('modal-root').innerHTML = `
+    <div class="overlay">
+      <div class="confirm-modal">
+        <div class="confirm-title">${room}号室 ${getRoomName(room)}</div>
+        <div class="confirm-body">
+          滞納開始月を <b>${ymLabel(u.from)} → ${ymLabel(newFrom)}</b> に直します。
+          <div class="confirm-amount">${count}ヶ月分を${later ? '支払い済み' : '未払い'}に</div>
+          <div class="confirm-amount-sub">対象: ${range}</div>
+          ${later
+            ? '<b>お金の記録は作りません。</b>今回受け取るお金の分は、ここに含めず、修正後に月のマスをタップして登録してください。'
+            : '<b>受領ログ・収支記録は消えません。</b>誤って登録した受領を取り消す場合は、シート側の修正も必要です。'}
+        </div>
+        <div class="confirm-actions">
+          <button class="confirm-btn cancel" onclick="refreshModal(${room})">キャンセル</button>
+          <button class="confirm-btn ${later ? 'ok' : 'danger'}" onclick="applyFromEdit()">修正する</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function applyFromEdit() {
+  if (!fromEdit || !fromEdit.newFrom) return;
+  const { room, newFrom, reason } = fromEdit;
+  fromEdit = null; // 二度押しでの重複実行を防ぐ
+  const u = unpaid[room];
+  const oldFrom = u.from;
+  unpaid[room] = { from: newFrom, to: u.to, longFlag: calcLongFlag(room, newFrom, u.to) };
+  pendingRooms.add(room);
+
+  const d = new Date();
+  const today = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+  const line = `[${today}] 滞納開始月を${ymLabel(oldFrom)}→${ymLabel(newFrom)}に修正${reason ? `（${reason}）` : ''}`;
+  memos[room] = memos[room] ? `${memos[room]}\n${line}` : line;
+
+  lsSave();
+  persistPendingState();
+  updateSyncBtn();
+  updateStats();
+  if (currentFloor !== null) renderRoomList(currentFloor);
+  if (currentTab === 'od') renderUnpaidList();
+  openModal(room);
+  showToast('滞納開始月を直しました。「同期」を押して反映してください');
+
+  try {
+    await dbPutAll('memos', [{ room, memo: memos[room] }]);
+    if (navigator.onLine) await gasPost({ action: 'updateMemo', room, memo: memos[room] });
+  } catch (e) { /* メモの保存に失敗しても修正自体は有効 */ }
+}
 
 // ===================================================
 // 住人情報管理
