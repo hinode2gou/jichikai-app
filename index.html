@@ -63,8 +63,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .menu-welcome{margin-bottom:24px;}
 .menu-welcome-title{font-size:22px;font-weight:700;color:var(--text);}
 .menu-welcome-sub{font-size:14px;color:var(--text2);margin-top:4px;}
-.menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;}
-.menu-card{border-radius:16px;padding:22px 20px;cursor:pointer;display:flex;flex-direction:column;gap:12px;border:2px solid transparent;transition:transform 0.1s,box-shadow 0.1s;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+.menu-section-title{font-size:15px;font-weight:700;color:var(--text2);margin:22px 0 10px;padding-left:8px;border-left:4px solid var(--blue2);}
+.menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px;}
+.menu-card{border-radius:14px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:14px;border:2px solid transparent;transition:transform 0.1s,box-shadow 0.1s;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+.menu-card-body{min-width:0;}
+.help-open-btn{display:block;width:100%;padding:13px;border-radius:14px;border:2px solid var(--blue-b);background:var(--white);color:var(--blue);font-size:16px;font-weight:700;cursor:pointer;}
+.help-intro{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:6px;}
+.help-item{border:1px solid var(--gray-b);border-radius:10px;margin-bottom:8px;background:var(--white);}
+.help-item summary{padding:13px 14px;font-size:15px;font-weight:600;cursor:pointer;}
+.help-body{padding:0 14px 14px;font-size:14px;line-height:1.75;}
+.help-body ol,.help-body ul{padding-left:22px;}
+.help-note{margin-top:8px;padding:8px 10px;background:var(--yellow-l);border-radius:8px;font-size:13px;}
+.help-go{display:inline-block;margin:10px 8px 0 0;padding:9px 14px;border-radius:8px;border:none;background:var(--blue2);color:var(--white);font-size:13px;font-weight:600;cursor:pointer;}
 .menu-card:active{transform:scale(0.97);}
 .menu-card.blue{background:var(--blue-l);border-color:var(--blue-b);}
 .menu-card.green{background:var(--green-l);border-color:var(--green-b);}
@@ -72,8 +82,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .menu-card.purple{background:var(--purple-l);border-color:var(--purple-b);}
 .menu-card.red{background:var(--red-l);border-color:var(--red-b);}
 .menu-card.red .menu-card-title{color:var(--red);}
-.menu-card-icon{font-size:34px;}
-.menu-card-title{font-size:18px;font-weight:700;}
+.menu-card-icon{font-size:28px;flex-shrink:0;}
+.menu-card-title{font-size:17px;font-weight:700;}
 .menu-card.blue .menu-card-title{color:var(--blue);}
 .menu-card.green .menu-card-title{color:var(--green);}
 .menu-card.orange .menu-card-title{color:var(--orange);}
@@ -387,146 +397,163 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
           <div class="menu-welcome-title" id="menu-term-title">-</div>
           <div class="menu-welcome-sub" id="menu-term-sub">-</div>
         </div>
+        <button class="help-open-btn" onclick="showScreen('help')">❓ 使い方（やりたいことから探す）</button>
+
+        <div class="menu-section-title">集金</div>
         <div class="menu-grid">
           <div class="menu-card blue" onclick="showScreen('collection')">
             <div class="menu-card-icon">💰</div>
-            <div class="menu-card-title">自治会費管理</div>
-            <div class="menu-card-sub">集金状況の確認・受領登録</div>
-            <div id="menu-badge-unpaid"></div>
-          </div>
-          <div class="menu-card purple" onclick="showScreen('residents')">
-            <div class="menu-card-icon">👥</div>
-            <div class="menu-card-title">住人情報管理</div>
-            <div class="menu-card-sub">氏名・備考の更新</div>
-          </div>
-          <div class="menu-card green" onclick="showScreen('ledger')">
-            <div class="menu-card-icon">📊</div>
-            <div class="menu-card-title">出納連携</div>
-            <div class="menu-card-sub">集金分を収支に反映</div>
-            <div id="menu-badge-ledger"></div>
-          </div>
-          <div class="menu-card purple" onclick="showScreen('routine')">
-            <div class="menu-card-icon">🔌</div>
-            <div class="menu-card-title">定例出金登録</div>
-            <div class="menu-card-sub">電気・水道・ガス・清掃費をまとめて登録</div>
-          </div>
-          <div class="menu-card orange" onclick="showScreen('expense')">
-            <div class="menu-card-icon">📝</div>
-            <div class="menu-card-title">出金登録</div>
-            <div class="menu-card-sub">公共料金・清掃費・雑費</div>
-          </div>
-          <div class="menu-card green" onclick="showScreen('income')">
-            <div class="menu-card-icon">💰</div>
-            <div class="menu-card-title">収入登録</div>
-            <div class="menu-card-sub">集会所使用料・その他収入</div>
-          </div>
-          <div class="menu-card purple" onclick="showScreen('invalid')">
-            <div class="menu-card-icon">🏠</div>
-            <div class="menu-card-title">無効期間管理</div>
-            <div class="menu-card-sub">入居前・入院等の集金対象外期間</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">自治会費管理</div>
+              <div class="menu-card-sub">集金状況の確認・受領登録</div>
+              <div id="menu-badge-unpaid"></div>
+            </div>
           </div>
           <div class="menu-card green" onclick="showScreen('furikomi')">
             <div class="menu-card-icon">🏦</div>
-            <div class="menu-card-title">振込消込</div>
-            <div class="menu-card-sub">振込世帯の入金を通帳と照合して消込</div>
-          </div>
-          <div class="menu-card orange" onclick="showScreen('reconcile')">
-            <div class="menu-card-icon">🔍</div>
-            <div class="menu-card-title">支払い整合性チェック</div>
-            <div class="menu-card-sub">受領ログと支払い管理表のズレを診断</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">振込消込</div>
+              <div class="menu-card-sub">振込世帯の入金を通帳と照合して消込</div>
+            </div>
           </div>
           <div class="menu-card red" onclick="showScreen('arrearslist')">
             <div class="menu-card-icon">🧾</div>
-            <div class="menu-card-title">滞納者一覧</div>
-            <div class="menu-card-sub">滞納している部屋と残額の一覧・印刷</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">滞納者一覧</div>
+              <div class="menu-card-sub">滞納している部屋と残額の一覧・印刷</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="menu-section-title">お金の記録</div>
+        <div class="menu-grid">
+          <div class="menu-card green" onclick="showScreen('ledger')">
+            <div class="menu-card-icon">📊</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">出納連携</div>
+              <div class="menu-card-sub">集金分を収支に反映</div>
+              <div id="menu-badge-ledger"></div>
+            </div>
+          </div>
+          <div class="menu-card purple" onclick="showScreen('routine')">
+            <div class="menu-card-icon">🔌</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">定例出金登録</div>
+              <div class="menu-card-sub">電気・水道・ガス・清掃費をまとめて登録</div>
+            </div>
+          </div>
+          <div class="menu-card orange" onclick="showScreen('expense')">
+            <div class="menu-card-icon">📝</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">出金登録</div>
+              <div class="menu-card-sub">公共料金・清掃費・雑費</div>
+            </div>
+          </div>
+          <div class="menu-card green" onclick="showScreen('income')">
+            <div class="menu-card-icon">💴</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">収入登録</div>
+              <div class="menu-card-sub">集会所使用料・その他収入</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="menu-section-title">書類を作る</div>
+        <div class="menu-grid">
+          <div class="menu-card blue" onclick="showScreen('coldoc')">
+            <div class="menu-card-icon">📄</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">集金日程ドキュメント作成</div>
+              <div class="menu-card-sub">期ごとの集金日程を自動生成</div>
+            </div>
+          </div>
+          <div class="menu-card green" onclick="showScreen('householdreceipt')">
+            <div class="menu-card-icon">🧾</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">領収書作成（各世帯）</div>
+              <div class="menu-card-sub">期ごとの月ラベルを差し替えて自動生成</div>
+            </div>
+          </div>
+          <div class="menu-card blue" onclick="showScreen('hallreceipt')">
+            <div class="menu-card-icon">🧾</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">集会所使用料領収書作成</div>
+              <div class="menu-card-sub">友愛クラブ3団体分をまとめて自動生成</div>
+            </div>
+          </div>
+          <div class="menu-card orange" onclick="showScreen('notice')">
+            <div class="menu-card-icon">⚠️</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">滞納通知書作成</div>
+              <div class="menu-card-sub">長期滞納者への通知書を自動生成</div>
+              <div id="menu-badge-notice"></div>
+            </div>
+          </div>
+          <div class="menu-card orange" onclick="showScreen('arrears')">
+            <div class="menu-card-icon">🧾</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">滞納者集金表作成</div>
+              <div class="menu-card-sub">領収書代わりの済/未済の表を自動生成</div>
+            </div>
+          </div>
+          <div class="menu-card green" onclick="showScreen('report')">
+            <div class="menu-card-icon">📊</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">会計報告書作成</div>
+              <div class="menu-card-sub">期ごとの収支をスプレッドシートで自動生成</div>
+            </div>
+          </div>
+          <div class="menu-card purple" onclick="showScreen('residentlist')">
+            <div class="menu-card-icon">🏢</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">入居者一覧表作成</div>
+              <div class="menu-card-sub">掲示用の一覧表（A3）を自動生成</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="menu-section-title">住人・管理</div>
+        <div class="menu-grid">
+          <div class="menu-card purple" onclick="showScreen('residents')">
+            <div class="menu-card-icon">👥</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">住人情報管理</div>
+              <div class="menu-card-sub">氏名・備考の更新</div>
+            </div>
+          </div>
+          <div class="menu-card purple" onclick="showScreen('invalid')">
+            <div class="menu-card-icon">🏠</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">無効期間管理</div>
+              <div class="menu-card-sub">入居前・入院等の集金対象外期間</div>
+            </div>
+          </div>
+          <div class="menu-card orange" onclick="showScreen('reconcile')">
+            <div class="menu-card-icon">🔍</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">支払い整合性チェック</div>
+              <div class="menu-card-sub">受領ログと支払い管理表のズレを診断</div>
+            </div>
           </div>
           <div class="menu-card blue" onclick="showScreen('backup')">
             <div class="menu-card-icon">💾</div>
-            <div class="menu-card-title">バックアップ管理</div>
-            <div class="menu-card-sub">今すぐ作成・世代の確認と削除</div>
-          </div>
-          <div style="grid-column:1/-1;display:flex;gap:12px;flex-wrap:wrap;">
-            <div class="menu-card orange" onclick="confirmSwitchTerm()" style="flex:1;min-width:240px;">
-              <div style="display:flex;align-items:center;gap:12px;">
-                <div class="menu-card-icon">⏭️</div>
-                <div>
-                  <div class="menu-card-title">期切替</div>
-                  <div class="menu-card-sub">次の期に切り替える（年2回・要確認）</div>
-                </div>
-              </div>
-            </div>
-            <div class="menu-card purple" onclick="confirmUndoSwitchTerm()" style="flex:1;min-width:240px;">
-              <div style="display:flex;align-items:center;gap:12px;">
-                <div class="menu-card-icon">↩️</div>
-                <div>
-                  <div class="menu-card-title">期切替を元に戻す</div>
-                  <div class="menu-card-sub">直前1期分の切替だけを取り消す</div>
-                </div>
-              </div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">バックアップ管理</div>
+              <div class="menu-card-sub">今すぐ作成・世代の確認と削除</div>
             </div>
           </div>
-          <div class="menu-card blue" onclick="showScreen('coldoc')" style="grid-column:1/-1;">
-            <div style="display:flex;align-items:center;gap:12px;">
-              <div class="menu-card-icon">📄</div>
-              <div>
-                <div class="menu-card-title">集金日程ドキュメント作成</div>
-                <div class="menu-card-sub">期ごとの集金日程をGoogleドキュメントで自動生成</div>
-              </div>
+          <div class="menu-card orange" onclick="confirmSwitchTerm()">
+            <div class="menu-card-icon">⏭️</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">期切替</div>
+              <div class="menu-card-sub">次の期に切り替える（年2回・要確認）</div>
             </div>
           </div>
-          <div class="menu-card green" onclick="showScreen('report')" style="grid-column:1/-1;">
-            <div style="display:flex;align-items:center;gap:12px;">
-              <div class="menu-card-icon">📊</div>
-              <div>
-                <div class="menu-card-title">会計報告書作成</div>
-                <div class="menu-card-sub">期ごとの収支をGoogleスプレッドシートで自動生成</div>
-              </div>
-            </div>
-          </div>
-          <div class="menu-card green" onclick="showScreen('householdreceipt')" style="grid-column:1/-1;">
-            <div style="display:flex;align-items:center;gap:12px;">
-              <div class="menu-card-icon">🧾</div>
-              <div>
-                <div class="menu-card-title">領収書作成（各世帯）</div>
-                <div class="menu-card-sub">期ごとの月ラベルを差し替えて自動生成</div>
-              </div>
-            </div>
-          </div>
-          <div class="menu-card blue" onclick="showScreen('hallreceipt')" style="grid-column:1/-1;">
-            <div style="display:flex;align-items:center;gap:12px;">
-              <div class="menu-card-icon">🧾</div>
-              <div>
-                <div class="menu-card-title">集会所使用料領収書作成</div>
-                <div class="menu-card-sub">期末に友愛クラブ3団体分をまとめて自動生成</div>
-              </div>
-            </div>
-          </div>
-          <div class="menu-card purple" onclick="showScreen('residentlist')" style="grid-column:1/-1;">
-            <div style="display:flex;align-items:center;gap:12px;">
-              <div class="menu-card-icon">🏢</div>
-              <div>
-                <div class="menu-card-title">入居者一覧表作成</div>
-                <div class="menu-card-sub">住人情報から掲示用の一覧表（A3）を自動生成</div>
-              </div>
-            </div>
-          </div>
-          <div class="menu-card orange" onclick="showScreen('notice')" style="grid-column:1/-1;">
-            <div style="display:flex;align-items:center;gap:12px;">
-              <div class="menu-card-icon">⚠️</div>
-              <div>
-                <div class="menu-card-title">滞納通知書作成</div>
-                <div class="menu-card-sub">長期滞納者への通知書をGoogleドキュメントで自動生成</div>
-                <div id="menu-badge-notice"></div>
-              </div>
-            </div>
-          </div>
-          <div class="menu-card orange" onclick="showScreen('arrears')" style="grid-column:1/-1;">
-            <div style="display:flex;align-items:center;gap:12px;">
-              <div class="menu-card-icon">🧾</div>
-              <div>
-                <div class="menu-card-title">滞納者集金表作成</div>
-                <div class="menu-card-sub">領収書代わりに、滞納開始月から現在までの済/未済を期ごとに一覧化</div>
-              </div>
+          <div class="menu-card purple" onclick="confirmUndoSwitchTerm()">
+            <div class="menu-card-icon">↩️</div>
+            <div class="menu-card-body">
+              <div class="menu-card-title">期切替を元に戻す</div>
+              <div class="menu-card-sub">直前1期分の切替だけを取り消す</div>
             </div>
           </div>
         </div>
@@ -1102,6 +1129,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       </div>
     </div>
 
+    <!-- 使い方（ヘルプ） -->
+    <div id="screen-help" style="display:none;">
+      <div class="finance-section">
+        <div class="help-intro">やりたいことをタップすると、手順が開きます。</div>
+        <div id="help-body"></div>
+      </div>
+    </div>
+
     <!-- バックアップ管理 -->
     <div id="screen-backup" style="display:none;">
       <div class="finance-section">
@@ -1242,7 +1277,7 @@ let currentTab    = 'col';
 
 function showScreen(name, pushStack = true) {
   // 全画面非表示
-  ['menu','collection','residents','ledger','expense','income','coldoc','report','hallreceipt','residentlist','householdreceipt','notice','arrears','invalid','routine','reconcile','furikomi','arrearslist','backup'].forEach(s => {
+  ['menu','collection','residents','ledger','expense','income','coldoc','report','hallreceipt','residentlist','householdreceipt','notice','arrears','invalid','routine','reconcile','furikomi','arrearslist','backup','help'].forEach(s => {
     document.getElementById('screen-' + s).style.display = 'none';
   });
   document.getElementById('screen-' + name).style.display = 'block';
@@ -1277,6 +1312,7 @@ function showScreen(name, pushStack = true) {
   if (name === 'furikomi')   initFurikomi();
   if (name === 'arrearslist') initArrearsList();
   if (name === 'backup')     initBackup();
+  if (name === 'help')       initHelp();
   if (name === 'routine')    initRoutineExpense();
 }
 
@@ -1309,6 +1345,7 @@ function updateHeader(name) {
     furikomi:   '振込消込',
     arrearslist: '滞納者一覧',
     backup:     'バックアップ管理',
+    help:       '使い方',
     routine:    '定例出金登録',
   };
   document.getElementById('header-title').textContent = titles[name] || '';
@@ -4727,6 +4764,156 @@ function fkOpenTermPicker() {
 // バックアップ管理
 // ===================================================
 let backupData = null;
+
+// ===================================================
+// 使い方（ヘルプ）
+// ===================================================
+// 「やりたいこと」から手順を引くための画面。画面のボタン名や動きを変えたら、ここの文言も直すこと。
+// 公開リポジトリのため、住人の氏名・部屋ごとの事情は書かない
+// 形式: [見出し, [ { q:やりたいこと, steps:[手順], note:注意(任意), go:[[画面名, ボタンの文言]] } ]]
+const HELP_SECTIONS = [
+  ['集金する', [
+    { q: '集金日にすること',
+      steps: ['「自治会費管理」を開き、階を選びます',
+              '受け取った最後の月のマスをタップします（滞納がある場合は、古い月からその月までがまとめて対象になります）',
+              '確認画面の<b>合計金額</b>が、受け取るお金と合っているのを確かめて「登録する」を押します',
+              '右上の「未同期」ボタンを押して<b>同期</b>します（「同期済」になれば完了）',
+              '「出納連携」を開き、「収支記録に反映する」を押します',
+              '反映した金額と、手元の現金が合うか数えます'],
+      note: '合計金額が受け取るお金より多いときは登録せず、「受け取る月がずれている」の手順で開始月を直してください。',
+      go: [['collection', '自治会費管理'], ['ledger', '出納連携']] },
+    { q: '何年も前の滞納分を受け取る',
+      steps: ['「自治会費管理」で、部屋の<b>名前</b>をタップします',
+              '滞納のある期がすべて並ぶので、受け取った最後の月をタップします',
+              '合計金額を確かめて「登録する」を押し、同期します'],
+      note: '集金画面の期の名前（例: 2026年度 後期 ▾）をタップすると、遠い期へ直接移動できます。',
+      go: [['collection', '自治会費管理']] },
+    { q: '督促のメモを残す',
+      steps: ['「自治会費管理」で、部屋の名前をタップします', '「督促メモ」に書いて「メモを保存」を押します'],
+      go: [['collection', '自治会費管理']] },
+    { q: '振込の人の入金を確認する',
+      steps: ['「振込消込」を開き、通帳を見ながら入金のあった月をタップします',
+              '「まとめて消込」か「その月だけ」を選びます。現金で受け取った分は「現金」を選びます',
+              '間違えたら、緑のマスをタップして取り消します'],
+      note: '消込は通帳との照合用の記録です。収支記録や残高には入りません。',
+      go: [['furikomi', '振込消込']] },
+    { q: '途中から振込になった人がいる',
+      steps: ['「住人情報管理」で、備考に<b>★振込★</b>を追加します（通常の集金・滞納通知の対象から外れます）',
+              '「振込消込」で、その部屋の名前をタップして<b>振込開始月</b>を選びます'],
+      go: [['residents', '住人情報管理'], ['furikomi', '振込消込']] },
+  ]],
+  ['間違えた・ずれている', [
+    { q: '受け取る月がずれている（滞納開始月が違う）',
+      steps: ['<b>受領を登録する前に</b>、部屋の名前をタップします',
+              '「滞納開始月を修正」で、まだ支払われていない最初の月を選びます',
+              '確認して「修正する」を押し、そのあと受け取った月をタップして登録します',
+              '同期します'],
+      note: '修正ではお金の記録は作られません。直した経緯は督促メモに残ります。',
+      go: [['collection', '自治会費管理']] },
+    { q: '登録を取り消す（まだ同期していない）',
+      steps: ['取り消したい最初の月の緑のマス（✓）をタップします',
+              '「未払いにする」を押します（その月より後の分もまとめて戻ります）'],
+      go: [['collection', '自治会費管理']] },
+    { q: '登録を間違えた（同期した後）',
+      steps: ['「バックアップ管理」でバックアップを作ります',
+              'スプレッドシートの「受領ログ」で、今回の受領日の行のうち、受け取っていない月の行を行ごと削除します（以前の日付の行は消さない）',
+              '「支払い管理表」の From が、最後に受け取った月の翌月になっているか確認します',
+              '消した行の「反映済」が TRUE のときは、「収入登録」の履歴で、その日の行の月数と金額を減らします',
+              '「支払い整合性チェック」でズレがないか確認します'],
+      note: '画面で緑のマスを戻すだけでは、受領ログの記録は消えません。',
+      go: [['backup', 'バックアップ管理'], ['income', '収入登録'], ['reconcile', '支払い整合性チェック']] },
+    { q: '出金・収入の金額を直す',
+      steps: ['「出金登録」または「収入登録」を開き、下の矢印で月を選びます', '履歴の行をタップして、直すか削除します'],
+      go: [['expense', '出金登録'], ['income', '収入登録']] },
+  ]],
+  ['入居・退去・引っ越し', [
+    { q: '新しい人が入居した',
+      steps: ['「住人情報管理」で氏名を更新します',
+              '集金しない月がある場合は、<b>受領を登録する前に</b>「無効期間管理」で入居前の期間を登録します（終了は入居の前の月）',
+              '前の住人の記録で開始月がずれているときは、部屋の名前 →「滞納開始月を修正」で入居月にします'],
+      go: [['residents', '住人情報管理'], ['invalid', '無効期間管理']] },
+    { q: '退去した・長く入院している',
+      steps: ['「無効期間管理」で期間を登録します。いつ終わるか分からないときは、終了を空欄にします',
+              '退去の場合は理由に「退去」と書きます（入居者一覧表で空欄になります）',
+              '期間が終わったら、一覧から終了月を確定します'],
+      note: '滞納が残る部屋は、通知書の対象のままになることがあります。',
+      go: [['invalid', '無効期間管理']] },
+    { q: '別の部屋へ引っ越した（滞納を引き継ぐ）',
+      steps: ['バックアップを作り、旧部屋の<b>滞納開始月</b>をメモします',
+              '新しい部屋の名前 →「滞納開始月を修正」で、旧部屋の開始月にします',
+              '旧部屋の名前 →「滞納開始月を修正」で、選べる一番先の月にします（支払い済み扱いになり、通知の対象から外れます）',
+              '旧部屋に、旧開始月から終了空欄の「退去」の無効期間を登録します',
+              '「住人情報管理」で両方の部屋の氏名・備考を更新し、同期します'],
+      note: '新しい部屋に前の住人の滞納が残っている場合は、上書きしてしまうので先に確認してください。',
+      go: [['backup', 'バックアップ管理'], ['collection', '自治会費管理'], ['invalid', '無効期間管理'], ['residents', '住人情報管理']] },
+  ]],
+  ['お金の記録と書類', [
+    { q: '毎月の電気・水道・清掃代などを登録する',
+      steps: ['「定例出金登録」で月を選びます', '金額を入れて「この月の内容を登録する」を押します（同じ月は上書きされます）',
+              '定例以外の支払いは「出金登録」、集会所使用料などは「収入登録」に入れます'],
+      go: [['routine', '定例出金登録'], ['expense', '出金登録'], ['income', '収入登録']] },
+    { q: '会計報告書を作る',
+      steps: ['その期の集金を同期して、出納連携まで済ませます', '出金・収入の登録漏れがないか確認します',
+              '「会計報告書作成」で期と繰越金を確認して生成します', '「出納帳」シートの現金の枚数は手で入力します'],
+      go: [['report', '会計報告書作成']] },
+    { q: '滞納している人の一覧がほしい',
+      steps: ['「滞納者一覧」を開きます', '印刷するときは「印刷する」、ファイルがほしいときは月数を選んで「ファイルを作成する」を押します'],
+      note: 'ファイル作成は、先に同期が必要です。振込の部屋は含まれません。',
+      go: [['arrearslist', '滞納者一覧']] },
+    { q: '長期滞納者への通知書・集金表を作る',
+      steps: ['「滞納通知書作成」または「滞納者集金表作成」を開き、対象者を確認します',
+              '「作成する（個別PDF）」を押し、終わったら「まとめる」を押します',
+              'メニューの下に出る一括PDFをダウンロードします'],
+      note: '作成には1〜2分かかります。対象は10ヶ月以上の長期滞納者です。',
+      go: [['notice', '滞納通知書作成'], ['arrears', '滞納者集金表作成']] },
+    { q: '領収書・集金日程・入居者一覧を作る',
+      steps: ['作りたい書類の画面を開き、期を選んで生成します（入居者一覧表は期の選択はありません）', '出てきたリンクから開く・ダウンロードします'],
+      go: [['householdreceipt', '各世帯の領収書'], ['hallreceipt', '集会所の領収書'], ['coldoc', '集金日程'], ['residentlist', '入居者一覧表']] },
+  ]],
+  ['期の変わり目（4月・10月）', [
+    { q: '期を切り替える',
+      steps: ['前の期の集金は、<b>期が変わる前に</b>同期して出納連携します', 'バックアップを作ります',
+              'メニューの「住人・管理」にある「期切替」を押し、切替先を確認して実行します'],
+      note: '期が変わってから切り替えるまでは、新しい期のマスがすべて「–」で表示されます（正常です）。',
+      go: [['ledger', '出納連携'], ['backup', 'バックアップ管理'], ['menu', 'メニュー']] },
+    { q: '期切替を間違えた',
+      steps: ['メニューの「期切替を元に戻す」を押します（直前の1期分だけ戻せます）'],
+      go: [['menu', 'メニュー']] },
+  ]],
+  ['困ったとき', [
+    { q: '同期に失敗する',
+      steps: ['電波を確認して、もう一度同期します（二重には登録されません）', '続く場合は、表示されたエラーの内容を控えます'] },
+    { q: '別の端末の変更が出ない・表示が古い',
+      steps: ['先に同期します', 'ページを再読み込みします', '直らなければ、メニューの下の「スプレッドシートからデータを再取得」を押します'],
+      go: [['menu', 'メニュー']] },
+    { q: '暗証番号の画面で進めない',
+      steps: ['何度も間違えると15分ロックされます。時間をおいて入れ直します', '通信エラーのときは「再試行」を押します'] },
+    { q: 'データが正しいか確かめる・元に戻したい',
+      steps: ['「支払い整合性チェック」で、支払い管理表と受領ログのズレを調べます',
+              '大きな操作の前には「バックアップ管理」でバックアップを作ります（毎月1日にも自動で作られます）'],
+      note: '開始月を手で直した部屋は、次の受領を登録するまでズレと表示されることがあります。',
+      go: [['reconcile', '支払い整合性チェック'], ['backup', 'バックアップ管理']] },
+  ]],
+];
+
+// 一度だけ組み立てる（開いた項目が、別の画面から戻ってきても閉じないように）
+function initHelp() {
+  const el = document.getElementById('help-body');
+  if (el.innerHTML.trim()) return;
+  el.innerHTML = HELP_SECTIONS.map(([title, items]) => `
+    <div class="menu-section-title">${title}</div>
+    ${items.map(it => `
+      <details class="help-item">
+        <summary>${it.q}</summary>
+        <div class="help-body">
+          <ol>${it.steps.map(s => `<li>${s}</li>`).join('')}</ol>
+          ${it.note ? `<div class="help-note">${it.note}</div>` : ''}
+          ${(it.go || []).map(([screen, label]) =>
+            `<button class="help-go" onclick="showScreen('${screen}')">${label}を開く</button>`).join('')}
+        </div>
+      </details>`).join('')}
+  `).join('');
+}
 
 // ===================================================
 // 滞納者一覧（画面表示・印刷）
