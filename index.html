@@ -168,6 +168,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .al-table th{background:var(--gray-l);font-size:12px;color:var(--text2);}
 .al-table td.num,.al-table th.num{text-align:right;white-space:nowrap;}
 .al-table tfoot td{font-weight:700;background:var(--gray-l);}
+.al-table td.al-chk,.al-table th.al-chk{width:44px;text-align:center;}
+.al-chk input{width:20px;height:20px;vertical-align:middle;cursor:pointer;}
+.al-table tbody tr{cursor:pointer;}
+.al-table tbody tr.al-off td{color:var(--text3);background:var(--gray-l);}
+.al-excluded{font-size:12px;color:var(--text2);margin:-4px 0 10px;}
 @media print{
   @page{size:A4 portrait;margin:12mm;}
   body{background:#fff;}
@@ -182,6 +187,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
   .al-table th,.al-table td{border-color:#000;}
   .al-table th{background:#eee;color:#000;}
   .al-table tfoot td{background:#eee;}
+  .al-table tfoot{display:table-row-group;} /* 合計行をページごとに繰り返さない */
+  .al-table .al-chk,.al-table tbody tr.al-off{display:none;} /* チェックした部屋だけを印刷する */
 }
 .from-edit-btn{display:block;width:100%;margin-top:8px;padding:9px;background:var(--white);border:1px solid var(--gray-b);border-radius:8px;font-size:13px;color:var(--blue);cursor:pointer;}
 .from-edit-field{display:block;width:100%;margin:8px 0;padding:10px;border:1px solid var(--gray-b);border-radius:8px;font-size:15px;color:var(--text);}
@@ -1098,6 +1105,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
               <option value="prev" id="al-basis-prev">前の期の末まで</option>
             </select>
           </label>
+          <label>対象
+            <select id="al-min-months" onchange="alSetMinMonths(this.value)">
+              <option value="1">すべて</option>
+              <option value="3">3ヶ月以上</option>
+              <option value="6">6ヶ月以上</option>
+              <option value="10">10ヶ月以上</option>
+              <option value="12">12ヶ月以上</option>
+            </select>
+          </label>
           <label>並び順
             <select id="al-sort" onchange="alSetSort(this.value)">
               <option value="room">部屋番号順</option>
@@ -1105,22 +1121,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             </select>
           </label>
         </div>
-        <button class="submit-btn no-print" style="margin-bottom:14px;" onclick="window.print()">🖨️ 印刷する</button>
+        <button class="submit-btn no-print" id="al-print-btn" style="margin-bottom:14px;" onclick="window.print()">🖨️ 印刷する</button>
         <div class="no-print" style="margin-bottom:14px;padding:12px;border:1px solid var(--gray-b);border-radius:var(--r);background:var(--gray-l);">
           <div style="font-size:13px;font-weight:600;margin-bottom:8px;">📄 ファイルで作成（スプレッドシート／PDF）</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
-            <select id="al-min-months" style="padding:8px;border:1px solid var(--gray-b);border-radius:8px;font-size:14px;">
-              <option value="3">3ヶ月以上</option>
-              <option value="6" selected>6ヶ月以上</option>
-              <option value="10">10ヶ月以上</option>
-              <option value="12">12ヶ月以上</option>
-            </select>
-            <span style="font-size:13px;color:var(--text2);">滞納している部屋（上の「残額の集計」の基準で作成）</span>
-          </div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">下の一覧でチェックした部屋を、画面と同じ集計の基準・並び順でファイルにします</div>
           <button class="submit-btn" id="al-file-btn" onclick="submitCreateArrearsListFile()">📄 ファイルを作成する</button>
           <div id="al-file-result" style="display:none;margin-top:12px;padding:12px;background:var(--green-l);border:1px solid var(--green-b);border-radius:var(--r);">
             <div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:4px;" id="al-file-summary"></div>
             <div style="font-size:12px;color:var(--text2);margin-bottom:10px;" id="al-file-path"></div>
+            <div style="display:none;font-size:13px;font-weight:600;color:var(--red);margin-bottom:10px;" id="al-file-warn"></div>
             <a id="al-file-ss" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--green);text-decoration:none;margin-bottom:6px;">📊 スプレッドシートで開く</a>
             <a id="al-file-xlsx" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--blue2);text-decoration:none;margin-bottom:6px;">📥 Excelでダウンロード</a>
             <a id="al-file-pdf" href="#" target="_blank" style="display:block;padding:10px;background:var(--white);border:1px solid var(--green-b);border-radius:8px;text-align:center;font-size:13px;font-weight:600;color:var(--red);text-decoration:none;">🖨️ PDFでダウンロード（印刷用）</a>
@@ -4858,7 +4867,9 @@ const HELP_SECTIONS = [
               '「会計報告書作成」で期と繰越金を確認して生成します', '「出納帳」シートの現金の枚数は手で入力します'],
       go: [['report', '会計報告書作成']] },
     { q: '滞納している人の一覧がほしい',
-      steps: ['「滞納者一覧」を開きます', '印刷するときは「印刷する」、ファイルがほしいときは月数を選んで「ファイルを作成する」を押します'],
+      steps: ['「滞納者一覧」を開き、「残額の集計」と「対象」（何ヶ月以上か）を選びます',
+              '一覧に入れない部屋はチェックを外します（画面を開き直すと全員チェックに戻ります）',
+              '印刷するときは「印刷する」、ファイルがほしいときは「ファイルを作成する」を押します'],
       note: 'ファイル作成は、先に同期が必要です。振込の部屋は含まれません。',
       go: [['arrearslist', '滞納者一覧']] },
     { q: '長期滞納者への通知書・集金表を作る',
@@ -4925,6 +4936,8 @@ function initHelp() {
 // ★振込★/★その他★の部屋・氏名なし・先頭が✕（空室扱い）の部屋は含めない
 let alBasis = 'now';
 let alSort  = 'room';
+let alMinMonths = 1;          // 対象の月数（1＝すべて）
+const alExcluded = new Set(); // チェックを外した部屋（画面を開き直すと全員チェックに戻る）
 
 // 今日の日付から見た「前の期」の最後の月（後期なら9月、前期なら3月）
 function alPrevTermEnd() { return TERMS[CURRENT_IDX - 1].endYM; }
@@ -4933,9 +4946,12 @@ function initArrearsList() {
   document.getElementById('al-basis-prev').textContent = `前の期の末まで（${ymLabel(alPrevTermEnd())}分まで）`;
   document.getElementById('al-basis').value = alBasis;
   document.getElementById('al-sort').value  = alSort;
+  document.getElementById('al-min-months').value = String(alMinMonths);
+  alExcluded.clear();
+  alHideFileResult();
   renderArrearsList();
 }
-// N ヶ月以上の滞納者を、スプレッドシート（＋Excel/PDFリンク）として作成する。
+// 一覧でチェックした滞納者を、スプレッドシート（＋Excel/PDFリンク）として作成する。
 // 集計はサーバー側の支払い管理表を元にするため、未同期の入力が端末にあれば先に同期が必要
 async function submitCreateArrearsListFile() {
   if (!navigator.onLine) { showToast('オフライン中は作成できません'); return; }
@@ -4943,26 +4959,43 @@ async function submitCreateArrearsListFile() {
     showToast('未同期の入力があります。先に同期してから作成してください');
     return;
   }
-  const minMonths = Number(document.getElementById('al-min-months').value) || 6;
-  const basis = alBasis; // 作成中に画面の選択を変えても、押した時点の基準で扱う
+  // 作成中に画面の選択を変えても、押した時点の内容で扱う
+  const minMonths = alMinMonths;
+  const basis = alBasis;
+  const selected = alSelectedRows();
+  if (selected.length === 0) { showToast('チェックされた部屋がありません'); return; }
+  const rooms = selected.map(r => r.room);
+  const screenTotal = selected.reduce((s, r) => s + r.amount, 0);
   const btn = document.getElementById('al-file-btn');
   btn.disabled = true;
   btn.textContent = '作成中... しばらくお待ちください';
-  document.getElementById('al-file-result').style.display = 'none';
+  alHideFileResult();
   try {
-    const result = await gasPost({ action: 'createArrearsListSheet', minMonths, basis }, GAS_TIMEOUT_MS_LONG);
+    const result = await gasPost({ action: 'createArrearsListSheet', minMonths, basis, rooms }, GAS_TIMEOUT_MS_LONG);
     if (!result.success) throw new Error(result.error || '作成失敗');
     // サーバー側が古いと基準が無視されて「今月分まで」で作られるため、違う内容を正しいものとして見せない
     if ((result.basis || 'now') !== basis) {
       throw new Error('サーバーが選んだ基準に対応していません。作られたファイルは使わないでください');
     }
     if (!result.count) {
-      showToast(`${minMonths}ヶ月以上の滞納者はいません`);
+      showToast('サーバーのデータでは対象の部屋がありません。データを再取得してください');
       return;
+    }
+    // サーバー側が古いとチェックが無視されて全員分で作られる
+    if (!Array.isArray(result.rooms)) {
+      throw new Error('サーバーがチェックの指定に対応していません。作られたファイルは使わないでください');
     }
     document.getElementById('al-file-result').style.display = 'block';
     document.getElementById('al-file-summary').textContent =
-      `${minMonths}ヶ月以上（${ymLabel(result.throughYm)}分まで）: ${result.count}世帯　残額合計 ¥${Number(result.total).toLocaleString()}`;
+      `${minMonths > 1 ? `${minMonths}ヶ月以上` : 'すべて'}（${ymLabel(result.throughYm)}分まで）: ${result.count}世帯　残額合計 ¥${Number(result.total).toLocaleString()}`;
+    // 画面のデータとサーバーのデータが違う場合は、そのまま渡さないように知らせる
+    const missing = rooms.filter(room => !result.rooms.includes(room));
+    const warn = document.getElementById('al-file-warn');
+    const differs = missing.length > 0 || Number(result.total) !== screenTotal;
+    warn.style.display = differs ? 'block' : 'none';
+    warn.textContent = differs
+      ? `⚠ 画面の内容と違います（画面: ${rooms.length}世帯 ¥${screenTotal.toLocaleString()}${missing.length ? `／入らなかった部屋: ${missing.join('、')}` : ''}）。データを再取得して作り直してください`
+      : '';
     document.getElementById('al-file-path').textContent = `保存先: ${result.folderPath}/${result.title}`;
     document.getElementById('al-file-ss').href   = result.ssUrl;
     document.getElementById('al-file-xlsx').href = result.exportUrl;
@@ -4971,18 +5004,61 @@ async function submitCreateArrearsListFile() {
   } catch (e) {
     showToast('作成に失敗しました: ' + e.message);
   } finally {
-    btn.disabled = false;
     btn.textContent = '📄 ファイルを作成する';
+    btn.disabled = alSelectedRows().length === 0;
   }
 }
 
-function alSetBasis(v) {
-  alBasis = v;
-  // 前の基準で作ったファイルのリンクが、今の画面の内容に見えないように隠す
-  document.getElementById('al-file-result').style.display = 'none';
-  renderArrearsList();
+// 前の条件で作ったファイルのリンクが、今の画面の内容に見えないように隠す
+function alHideFileResult() { document.getElementById('al-file-result').style.display = 'none'; }
+function alSetBasis(v)     { alBasis = v; alHideFileResult(); renderArrearsList(); }
+function alSetSort(v)      { alSort  = v; alHideFileResult(); renderArrearsList(); }
+function alSetMinMonths(v) { alMinMonths = Number(v) || 1; alHideFileResult(); renderArrearsList(); }
+
+// 一覧に出ている部屋（基準と対象の月数で絞ったもの）
+function alVisibleRows() { return calcArrearsRows(alBasis).filter(r => r.months >= alMinMonths); }
+// そのうちチェックされている部屋（印刷・ファイル作成の対象）
+function alSelectedRows() { return alVisibleRows().filter(r => !alExcluded.has(r.room)); }
+
+function alSetChecked(room, checked) {
+  if (checked) alExcluded.delete(room); else alExcluded.add(room);
+  alHideFileResult();
+  alRefreshSelection();
 }
-function alSetSort(v)  { alSort  = v; renderArrearsList(); }
+function alToggleRoom(room) { alSetChecked(room, alExcluded.has(room)); }
+function alSetAllChecked(checked) {
+  alVisibleRows().forEach(r => { if (checked) alExcluded.delete(r.room); else alExcluded.add(r.room); });
+  alHideFileResult();
+  alRefreshSelection();
+}
+
+// チェックの状態を、行の表示・世帯数と合計・ボタンに反映する
+function alRefreshSelection() {
+  const rows = alVisibleRows();
+  const selected = rows.filter(r => !alExcluded.has(r.room));
+  const total  = selected.reduce((s, r) => s + r.amount, 0);
+  const months = selected.reduce((s, r) => s + r.months, 0);
+  document.querySelectorAll('#al-body tbody tr').forEach(tr => {
+    const off = alExcluded.has(Number(tr.dataset.room));
+    tr.classList.toggle('al-off', off);
+    tr.querySelector('input').checked = !off;
+  });
+  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  set('al-total-text', `滞納 ${selected.length}世帯　残額合計 ¥${total.toLocaleString()}`);
+  set('al-foot-label',  `合計（${selected.length}世帯）`);
+  set('al-foot-months', `${months}ヶ月`);
+  set('al-foot-amount', `¥${total.toLocaleString()}`);
+  const excluded = rows.length - selected.length;
+  set('al-excluded', excluded ? `チェックを外した ${excluded}世帯は、合計・印刷・ファイルに含めません` : '');
+  const all = document.getElementById('al-check-all');
+  if (all) {
+    all.checked = excluded === 0;
+    all.indeterminate = excluded > 0 && selected.length > 0;
+  }
+  document.getElementById('al-print-btn').disabled = selected.length === 0;
+  const fileBtn = document.getElementById('al-file-btn');
+  if (!fileBtn.textContent.startsWith('作成中')) fileBtn.disabled = selected.length === 0;
+}
 
 function calcArrearsRows(basis) {
   const now   = new Date();
@@ -5011,7 +5087,7 @@ function calcArrearsRows(basis) {
 
 function renderArrearsList() {
   const el = document.getElementById('al-body');
-  const rows = calcArrearsRows(alBasis);
+  const rows = alVisibleRows();
   const now  = new Date();
   const nowYm = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`;
   const termIdx = getDataTermIdx();
@@ -5021,25 +5097,27 @@ function renderArrearsList() {
     : alBasis === 'prev'
     ? `${ymLabel(alPrevTermEnd())}分まで（前の期の末まで）`
     : `${ymLabel(nowYm)}分まで`;
-  const total = rows.reduce((s, r) => s + r.amount, 0);
   const today = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
 
-  let html = `<div class="al-title">滞納者一覧</div>
+  let html = `<div class="al-title">滞納者一覧${alMinMonths > 1 ? `（${alMinMonths}ヶ月以上）` : ''}</div>
     <div class="al-sub">${today}現在　集計: ${basisLabel}　月額 ¥${MONTHLY_FEE.toLocaleString()}</div>
-    <div class="al-total">滞納 ${rows.length}世帯　残額合計 ¥${total.toLocaleString()}</div>`;
+    <div class="al-total" id="al-total-text"></div>
+    <div class="al-excluded no-print" id="al-excluded"></div>`;
   if (rows.length === 0) {
-    html += '<div class="empty-state">滞納している部屋はありません 🎉</div>';
+    html += `<div class="empty-state">${alMinMonths > 1 ? `${alMinMonths}ヶ月以上滞納している部屋はありません` : '滞納している部屋はありません 🎉'}</div>`;
   } else {
     html += `<table class="al-table">
-      <thead><tr><th>部屋</th><th>氏名</th><th>滞納開始月</th><th class="num">月数</th><th class="num">残額</th></tr></thead>
-      <tbody>${rows.map(r => `<tr>
+      <thead><tr><th class="al-chk"><input type="checkbox" id="al-check-all" aria-label="すべて選択" onchange="alSetAllChecked(this.checked)"></th><th>部屋</th><th>氏名</th><th>滞納開始月</th><th class="num">月数</th><th class="num">残額</th></tr></thead>
+      <tbody>${rows.map(r => `<tr data-room="${r.room}" onclick="alToggleRoom(${r.room})">
+        <td class="al-chk"><input type="checkbox" aria-label="${r.room}号室" onclick="event.stopPropagation()" onchange="alSetChecked(${r.room}, this.checked)"></td>
         <td>${r.room}</td><td>${escapeHtml(r.name)}</td><td>${ymLabel(r.from)}〜</td>
         <td class="num">${r.months}ヶ月</td><td class="num">¥${r.amount.toLocaleString()}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td colspan="3">合計（${rows.length}世帯）</td>
-        <td class="num">${rows.reduce((s, r) => s + r.months, 0)}ヶ月</td><td class="num">¥${total.toLocaleString()}</td></tr></tfoot>
+      <tfoot><tr><td class="al-chk"></td><td colspan="3" id="al-foot-label"></td>
+        <td class="num" id="al-foot-months"></td><td class="num" id="al-foot-amount"></td></tr></tfoot>
     </table>`;
   }
   el.innerHTML = html;
+  alRefreshSelection();
 }
 
 async function initBackup() {
