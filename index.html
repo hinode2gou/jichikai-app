@@ -1095,6 +1095,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
             <select id="al-basis" onchange="alSetBasis(this.value)">
               <option value="now">今月分まで（いま払うべき額）</option>
               <option value="term">今期の末まで</option>
+              <option value="prev" id="al-basis-prev">前の期の末まで</option>
             </select>
           </label>
           <label>並び順
@@ -4925,7 +4926,11 @@ function initHelp() {
 let alBasis = 'now';
 let alSort  = 'room';
 
+// 今日の日付から見た「前の期」の最後の月（後期なら9月、前期なら3月）
+function alPrevTermEnd() { return TERMS[CURRENT_IDX - 1].endYM; }
+
 function initArrearsList() {
+  document.getElementById('al-basis-prev').textContent = `前の期の末まで（${ymLabel(alPrevTermEnd())}分まで）`;
   document.getElementById('al-basis').value = alBasis;
   document.getElementById('al-sort').value  = alSort;
   renderArrearsList();
@@ -4980,7 +4985,9 @@ function calcArrearsRows(basis) {
     if (!name || name.trim().startsWith('✕')) return;
     const u = unpaid[room];
     if (!u || !u.from || !u.to) return;
-    const through = basis === 'term' || ymToNum(u.to) < ymToNum(nowYm) ? u.to : nowYm;
+    // 数える範囲の終わり。'term'=今期の末(To)、'now'=今月、'prev'=前の期の末（いずれもToより先は数えない）
+    const limit = basis === 'term' ? u.to : basis === 'prev' ? alPrevTermEnd() : nowYm;
+    const through = ymToNum(u.to) < ymToNum(limit) ? u.to : limit;
     if (ymToNum(u.from) > ymToNum(through)) return;
     // 入院中などで終了日未設定の無効期間も、数える範囲の終わりまで延ばして除外する
     const months = effectiveMonthCount(u.from, through, getInvalidMonthSet(room, through));
@@ -5001,6 +5008,8 @@ function renderArrearsList() {
   const termEnd = TERMS[termIdx !== null ? termIdx : CURRENT_IDX].endYM;
   const basisLabel = alBasis === 'term'
     ? `${ymLabel(termEnd)}分まで（今期の末まで）`
+    : alBasis === 'prev'
+    ? `${ymLabel(alPrevTermEnd())}分まで（前の期の末まで）`
     : `${ymLabel(nowYm)}分まで`;
   const total = rows.reduce((s, r) => s + r.amount, 0);
   const today = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
